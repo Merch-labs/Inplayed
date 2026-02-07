@@ -66,7 +66,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		var bitrate = Math.Max(1, settings.Bitrate);
 		var ffmpegPath = ResolveFfmpegPath();
 		var args =
-			$"-y -f rawvideo -pix_fmt rgba -s {settings.Width}x{settings.Height} -r {fps} " +
+			$"-y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
 			$"-i - -c:v libx264 -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";
 
 		var psi = new ProcessStartInfo
