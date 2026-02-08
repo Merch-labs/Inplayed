@@ -31,6 +31,8 @@ public sealed class FfmpegEncoder : IVideoEncoder
 	public Task FlushRecentAsync(string path, TimeSpan clipLength)
 	{
 		List<VideoFrame> frames;
+		var fps = Math.Max(1, _settings.Fps);
+		var expectedFrames = Math.Max(1, (int)Math.Round(clipLength.TotalSeconds * fps));
 		lock (_lock)
 		{
 			if (_frames.Count == 0)
@@ -42,6 +44,30 @@ public sealed class FfmpegEncoder : IVideoEncoder
 			var latestTimestamp = all[^1].Timestamp;
 			var earliest = latestTimestamp - (long)clipLength.TotalMilliseconds;
 			frames = all.Where(f => f.Timestamp >= earliest).ToList();
+		}
+
+		if (frames.Count > 0)
+		{
+			var startTimestamp = frames[0].Timestamp;
+			var endTimestamp = frames[^1].Timestamp;
+			var targetDurationMs = Math.Max(1, (long)clipLength.TotalMilliseconds);
+			var targetStart = endTimestamp - targetDurationMs;
+			var frameDurationMs = targetDurationMs / (double)expectedFrames;
+
+			var resampled = new List<VideoFrame>(expectedFrames);
+			var index = 0;
+			for (var i = 0; i < expectedFrames; i++)
+			{
+				var targetTime = targetStart + (long)Math.Round(i * frameDurationMs);
+				while (index + 1 < frames.Count && frames[index + 1].Timestamp <= targetTime)
+				{
+					index++;
+				}
+
+				resampled.Add(frames[index]);
+			}
+
+			frames = resampled;
 		}
 
 		return Task.Run(() => WriteWithFfmpeg(path, frames, _settings));

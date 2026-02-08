@@ -52,10 +52,32 @@ public sealed class ClipSession : IDisposable
 
 	private async Task CaptureLoop()
 	{
+		var fps = Math.Max(1, Settings.Fps);
+		var frameDuration = TimeSpan.FromSeconds(1.0 / fps);
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+		var nextFrameTime = stopwatch.Elapsed;
+
 		while (!_cts.IsCancellationRequested)
 		{
+			var now = stopwatch.Elapsed;
+			if (now < nextFrameTime)
+			{
+				var delay = nextFrameTime - now;
+				if (delay > TimeSpan.Zero)
+				{
+					await Task.Delay(delay);
+				}
+			}
+
 			var frame = _capture.CaptureFrame();
 			await _frameChannel.Writer.WriteAsync(frame);
+
+			nextFrameTime += frameDuration;
+			var drift = stopwatch.Elapsed - nextFrameTime;
+			if (drift > frameDuration)
+			{
+				nextFrameTime = stopwatch.Elapsed + frameDuration;
+			}
 		}
 	}
 
