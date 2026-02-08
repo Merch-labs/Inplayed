@@ -117,7 +117,7 @@ public sealed class WindowCapture : IVideoCapture
 			var hdc = g.GetHdc();
 			try
 			{
-				captured = PrintWindow(_hwnd, hdc, 0);
+				captured = PrintWindow(_hwnd, hdc, PW_RENDERFULLCONTENT);
 			}
 			finally
 			{
@@ -146,6 +146,8 @@ public sealed class WindowCapture : IVideoCapture
 		_windowBitmap?.Dispose();
 		_targetBitmap.Dispose();
 	}
+
+	private const int PW_RENDERFULLCONTENT = 0x00000002;
 
 	[DllImport("user32.dll")]
 	private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
