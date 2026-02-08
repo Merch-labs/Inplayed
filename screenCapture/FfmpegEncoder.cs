@@ -33,6 +33,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		List<VideoFrame> frames;
 		var fps = Math.Max(1, _settings.Fps);
 		var expectedFrames = Math.Max(1, (int)Math.Round(clipLength.TotalSeconds * fps));
+		double? fpsOverride = null;
 		lock (_lock)
 		{
 			if (_frames.Count == 0)
@@ -46,36 +47,50 @@ public sealed class FfmpegEncoder : IVideoEncoder
 			frames = all.Where(f => f.Timestamp >= earliest).ToList();
 		}
 
-		if (frames.Count > 0)
+		if (frames.Count > 1)
 		{
 			var startTimestamp = frames[0].Timestamp;
 			var endTimestamp = frames[^1].Timestamp;
 			var targetDurationMs = Math.Max(1, (long)clipLength.TotalMilliseconds);
-			var targetStart = endTimestamp - targetDurationMs;
-			var frameDurationMs = targetDurationMs / (double)expectedFrames;
+			var actualDurationMs = Math.Max(1, endTimestamp - startTimestamp);
 
-			var resampled = new List<VideoFrame>(expectedFrames);
-			var index = 0;
-			for (var i = 0; i < expectedFrames; i++)
+			if (actualDurationMs < targetDurationMs)
 			{
-				var targetTime = targetStart + (long)Math.Round(i * frameDurationMs);
-				while (index + 1 < frames.Count && frames[index + 1].Timestamp <= targetTime)
+				// Clip is shorter than requested; keep frames as-is and adjust fps to avoid freeze/padding.
+				fpsOverride = frames.Count / (actualDurationMs / 1000.0);
+			}
+			else
+			{
+				var targetStart = endTimestamp - targetDurationMs;
+				var frameDurationMs = targetDurationMs / (double)expectedFrames;
+
+				var resampled = new List<VideoFrame>(expectedFrames);
+				var index = 0;
+				for (var i = 0; i < expectedFrames; i++)
 				{
-					index++;
+					var targetTime = targetStart + (long)Math.Round(i * frameDurationMs);
+					while (index + 1 < frames.Count && frames[index + 1].Timestamp <= targetTime)
+					{
+						index++;
+					}
+
+					resampled.Add(frames[index]);
 				}
 
-				resampled.Add(frames[index]);
+				frames = resampled;
 			}
-
-			frames = resampled;
 		}
 
-		return Task.Run(() => WriteWithFfmpeg(path, frames, _settings));
+		return Task.Run(() => WriteWithFfmpeg(path, frames, _settings, fpsOverride));
 	}
 
 	public void Dispose() { }
 
-	private static void WriteWithFfmpeg(string path, IReadOnlyList<VideoFrame> frames, RecordingSettings settings)
+	private static void WriteWithFfmpeg(
+		string path,
+		IReadOnlyList<VideoFrame> frames,
+		RecordingSettings settings,
+		double? fpsOverride)
 	{
 		if (frames.Count == 0)
 		{
@@ -88,7 +103,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 			Directory.CreateDirectory(directory);
 		}
 
-		var fps = Math.Max(1, settings.Fps);
+		var fps = Math.Max(1.0, fpsOverride ?? settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
 		var ffmpegPath = ResolveFfmpegPath();
 		var args =
@@ -113,6 +128,8 @@ public sealed class FfmpegEncoder : IVideoEncoder
 				throw new InvalidOperationException("Failed to start ffmpeg process.");
 			}
 
+			var errorTask = process.StandardError.ReadToEndAsync();
+
 			using var stdin = process.StandardInput.BaseStream;
 			foreach (var frame in frames)
 			{
@@ -125,7 +142,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 			if (process.ExitCode != 0)
 			{
-				var error = process.StandardError.ReadToEnd();
+				var error = errorTask.GetAwaiter().GetResult();
 				throw new InvalidOperationException($"ffmpeg failed (exit {process.ExitCode}). {error}");
 			}
 		}
