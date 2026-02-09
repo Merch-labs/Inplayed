@@ -15,24 +15,3 @@ public static class CaptureFactory
 		return new MonitorCapture(0, settings.Width, settings.Height);
 	}
 }
-
-public sealed class DummyCapture : IVideoCapture
-{
-	private readonly int _width;
-	private readonly int _height;
-
-	public DummyCapture(int width, int height)
-	{
-		_width = width;
-		_height = height;
-	}
-
-	public VideoFrame CaptureFrame()
-	{
-		// return empty black frame
-		byte[] data = new byte[_width * _height * 4]; // RGBA
-		return new VideoFrame(data, _width, _height, DateTimeOffset.Now.ToUnixTimeMilliseconds());
-	}
-
-	public void Dispose() { }
-}
