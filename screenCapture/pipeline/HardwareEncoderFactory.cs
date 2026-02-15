@@ -12,6 +12,7 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
 			"1",
 			StringComparison.Ordinal);
+		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
 
 		if (!string.IsNullOrWhiteSpace(forced))
 		{
@@ -41,7 +42,7 @@ public static class HardwareEncoderFactory
 			}
 		}
 
-		if (FfmpegCapabilities.SupportsEncoder("h264_nvenc"))
+		if (hasNvidiaAdapter && FfmpegCapabilities.SupportsEncoder("h264_nvenc"))
 		{
 			Console.WriteLine("Encoder preferred: h264_nvenc (ffmpeg packet ring)");
 			if (enableNativeNvenc)
@@ -65,6 +66,10 @@ public static class HardwareEncoderFactory
 				() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
 				() => new FfmpegPacketRingHardwareEncoder("libx264"),
 				() => new CpuReadbackHardwareEncoder("libx264"));
+		}
+		else if (!hasNvidiaAdapter)
+		{
+			Console.WriteLine("NVIDIA adapter not detected; skipping NVENC backends");
 		}
 
 		Console.WriteLine("Encoder preferred: libx264 (ffmpeg packet ring)");

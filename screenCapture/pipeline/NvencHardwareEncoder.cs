@@ -11,6 +11,12 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	public void Start(RecordingSettings settings)
 	{
 		_ = settings;
+		if (!GpuCapabilityProbe.IsNvidiaAdapterPresent())
+		{
+			_status = "nvidia_adapter_not_detected";
+			throw new NotSupportedException("NVENC requires an NVIDIA adapter.");
+		}
+
 		if (!NativeNvencProbe.TryLoad(out _nvencLib, out var message))
 		{
 			_status = $"probe_failed:{message}";
