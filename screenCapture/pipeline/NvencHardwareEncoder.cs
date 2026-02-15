@@ -82,6 +82,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private NvencNative.CuDriverGetVersionDelegate? _cuDriverGetVersion;
 	private uint _maxSupportedVersion;
 	private int _cudaDriverVersion;
+	private IntPtr _functionListBuffer;
+	private uint _functionListVersion;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -173,7 +175,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC max supported version query failed: {rcName}");
 		}
 
-		_status = $"runtime_bound_cuda_ok(cu={FormatCudaDriverVersion(_cudaDriverVersion)})_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_but_not_implemented";
+		_functionListBuffer = NvencFunctionList.Allocate(_maxSupportedVersion, out _functionListVersion);
+		_status = $"runtime_bound_cuda_ok(cu={FormatCudaDriverVersion(_cudaDriverVersion)})_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -199,7 +202,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8}";
 	}
 
 	public void Stop()
@@ -238,6 +241,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_getMaxSupportedVersion = null;
 		_cuInit = null;
 		_cuDriverGetVersion = null;
+		NvencFunctionList.Free(ref _functionListBuffer);
+		_functionListVersion = 0;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 	}
