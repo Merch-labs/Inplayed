@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Buffers;
 using Vortice.Direct3D11;
 
 public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
@@ -91,14 +92,22 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				var width = frame.Width;
 				var height = frame.Height;
 				var rowBytes = width * 4;
-				var buffer = new byte[rowBytes * height];
-				for (var y = 0; y < height; y++)
+				var totalBytes = rowBytes * height;
+				var buffer = ArrayPool<byte>.Shared.Rent(totalBytes);
+				try
 				{
-					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
-					Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
-				}
+					for (var y = 0; y < height; y++)
+					{
+						var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
+						Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
+					}
 
-				_stdin.Write(buffer, 0, buffer.Length);
+					_stdin.Write(buffer, 0, totalBytes);
+				}
+				finally
+				{
+					ArrayPool<byte>.Shared.Return(buffer);
+				}
 			}
 			catch (IOException)
 			{
