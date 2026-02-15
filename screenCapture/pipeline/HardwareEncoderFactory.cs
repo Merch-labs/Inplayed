@@ -1,5 +1,22 @@
 public static class HardwareEncoderFactory
 {
+	public static string GetSelectionDebug()
+	{
+		var forced = Environment.GetEnvironmentVariable("INPLAYED_ENCODER")?.Trim().ToLowerInvariant();
+		var strictGpuOnly = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_STRICT_GPU"),
+			"1",
+			StringComparison.Ordinal);
+		var enableNativeNvenc = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
+			"1",
+			StringComparison.Ordinal);
+		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
+		var hasNvencFfmpeg = FfmpegCapabilities.SupportsEncoder("h264_nvenc");
+
+		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg}";
+	}
+
 	public static IHardwareEncoder Create(RecordingSettings settings)
 	{
 		_ = settings;

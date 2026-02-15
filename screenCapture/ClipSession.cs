@@ -23,6 +23,7 @@ public sealed class ClipSession : IDisposable
 
 		_cts = new CancellationTokenSource();
 		_captureSource = CaptureSourceFactory.Create(Settings);
+		StatusChanged?.Invoke($"encoderPolicy:{HardwareEncoderFactory.GetSelectionDebug()}");
 		_encoder = HardwareEncoderFactory.Create(Settings);
 		_captureManager = new CaptureManager(_captureSource, _encoder);
 
