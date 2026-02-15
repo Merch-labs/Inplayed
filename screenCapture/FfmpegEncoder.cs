@@ -5,13 +5,15 @@ using System.IO;
 public sealed class FfmpegEncoder : IVideoEncoder
 {
 	private readonly RecordingSettings _settings;
+	private readonly string _videoCodec;
 	private readonly object _lock = new();
 	private readonly Queue<VideoFrame> _frames = new();
 	private readonly int _maxFrames;
 
-	public FfmpegEncoder(RecordingSettings settings)
+	public FfmpegEncoder(RecordingSettings settings, string videoCodec = "libx264")
 	{
 		_settings = settings;
+		_videoCodec = string.IsNullOrWhiteSpace(videoCodec) ? "libx264" : videoCodec;
 		var fps = Math.Max(1, settings.Fps);
 		_maxFrames = Math.Max(1, fps * settings.ClipSeconds);
 	}
@@ -86,7 +88,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 	public void Dispose() { }
 
-	private static void WriteWithFfmpeg(
+	private void WriteWithFfmpeg(
 		string path,
 		IReadOnlyList<VideoFrame> frames,
 		RecordingSettings settings,
@@ -108,7 +110,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		var ffmpegPath = ResolveFfmpegPath();
 		var args =
 			$"-y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
-			$"-i - -c:v libx264 -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";
+			$"-i - -c:v {_videoCodec} -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";
 
 		var psi = new ProcessStartInfo
 		{

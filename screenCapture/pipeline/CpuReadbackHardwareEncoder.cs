@@ -3,6 +3,7 @@ using Vortice.Direct3D11;
 
 public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 {
+	private readonly string _videoCodec;
 	private readonly object _gate = new();
 	private RecordingSettings? _settings;
 	private FfmpegEncoder? _encoder;
@@ -13,6 +14,11 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 	private int _outputWidth;
 	private int _outputHeight;
 
+	public CpuReadbackHardwareEncoder(string videoCodec = "libx264")
+	{
+		_videoCodec = string.IsNullOrWhiteSpace(videoCodec) ? "libx264" : videoCodec;
+	}
+
 	public void Start(RecordingSettings settings)
 	{
 		lock (_gate)
@@ -20,7 +26,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 			_settings = settings;
 			_outputWidth = settings.Width;
 			_outputHeight = settings.Height;
-			_encoder = new FfmpegEncoder(settings);
+			_encoder = new FfmpegEncoder(settings, _videoCodec);
 			_device = D3D11Helper.CreateDevice();
 		}
 	}
