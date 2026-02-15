@@ -6,61 +6,82 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		if (!GpuCapabilityProbe.IsNvidiaAdapterPresent())
 		{
-			return new NvencReadiness(false, "nvidia_adapter_not_detected", 0, 0);
+			return new NvencReadiness(false, "nvidia_adapter_not_detected", 0, 0, 0);
 		}
 
 		IntPtr nvenc = IntPtr.Zero;
 		IntPtr cuda = IntPtr.Zero;
+		IntPtr fnList = IntPtr.Zero;
 		try
 		{
 			if (!NativeNvencProbe.TryLoad(out nvenc, out var msg))
 			{
-				return new NvencReadiness(false, $"probe_failed:{msg}", 0, 0);
+				return new NvencReadiness(false, $"probe_failed:{msg}", 0, 0, 0);
+			}
+
+			if (!NativeNvencProbe.TryBindCreateInstance(nvenc, out var createInstance, out msg) ||
+				createInstance == null)
+			{
+				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0);
 			}
 
 			if (!NativeNvencProbe.TryBindGetMaxSupportedVersion(nvenc, out var getMaxVersion, out msg) ||
 				getMaxVersion == null)
 			{
-				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0);
+				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0);
 			}
 
 			var maxRc = getMaxVersion(out var maxVersion);
 			if (maxRc != 0)
 			{
-				return new NvencReadiness(false, $"max_version_query_failed:{NvencNative.ResultToString(maxRc)}", 0, 0);
+				return new NvencReadiness(false, $"max_version_query_failed:{NvencNative.ResultToString(maxRc)}", 0, 0, 0);
+			}
+
+			fnList = NvencFunctionList.Allocate(maxVersion, out _);
+			var ciRc = createInstance(fnList);
+			if (ciRc != 0)
+			{
+				return new NvencReadiness(false, $"create_instance_failed:{NvencNative.ResultToString(ciRc)}", maxVersion, 0, 0);
+			}
+
+			var fnPtrCount = NvencFunctionList.CountNonZeroPointerSlots(fnList, 96);
+			if (fnPtrCount == 0)
+			{
+				return new NvencReadiness(false, "create_instance_empty_function_list", maxVersion, 0, 0);
 			}
 
 			if (!NativeNvencProbe.TryLoadCuda(out cuda, out msg))
 			{
-				return new NvencReadiness(false, $"cuda_missing:{msg}", maxVersion, 0);
+				return new NvencReadiness(false, $"cuda_missing:{msg}", maxVersion, 0, fnPtrCount);
 			}
 
 			if (!NativeNvencProbe.TryBindCudaInit(cuda, out var cuInit, out msg) || cuInit == null)
 			{
-				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0);
+				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount);
 			}
 
 			if (!NativeNvencProbe.TryBindCudaDriverGetVersion(cuda, out var cuGetVersion, out msg) || cuGetVersion == null)
 			{
-				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0);
+				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount);
 			}
 
 			var cuInitRc = cuInit(0);
 			if (cuInitRc != 0)
 			{
-				return new NvencReadiness(false, $"cuda_init_failed:{NvencNative.CudaResultToString(cuInitRc)}", maxVersion, 0);
+				return new NvencReadiness(false, $"cuda_init_failed:{NvencNative.CudaResultToString(cuInitRc)}", maxVersion, 0, fnPtrCount);
 			}
 
 			var cuVersionRc = cuGetVersion(out var cudaVersion);
 			if (cuVersionRc != 0)
 			{
-				return new NvencReadiness(false, $"cuda_version_failed:{NvencNative.CudaResultToString(cuVersionRc)}", maxVersion, 0);
+				return new NvencReadiness(false, $"cuda_version_failed:{NvencNative.CudaResultToString(cuVersionRc)}", maxVersion, 0, fnPtrCount);
 			}
 
-			return new NvencReadiness(true, "ready", maxVersion, cudaVersion);
+			return new NvencReadiness(true, "ready", maxVersion, cudaVersion, fnPtrCount);
 		}
 		finally
 		{
+			NvencFunctionList.Free(ref fnList);
 			if (nvenc != IntPtr.Zero)
 			{
 				try { NativeLibrary.Free(nvenc); } catch { }
