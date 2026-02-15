@@ -40,6 +40,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private long _restartCount;
 	private long _queueDrops;
 	private long _queuedBuffers;
+	private long _lastSubmittedFrameTs;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -112,7 +113,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 						Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
 					}
 
-					if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes)))
+					if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes, frame.Timestamp)))
 					{
 						Interlocked.Increment(ref _queueDrops);
 						ArrayPool<byte>.Shared.Return(buffer);
@@ -168,7 +169,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)}";
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)}";
 		}
 	}
 
@@ -357,6 +358,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				{
 					await stdin.WriteAsync(input.Buffer, 0, input.Count);
 					Interlocked.Add(ref _inputBytes, input.Count);
+					Interlocked.Exchange(ref _lastSubmittedFrameTs, input.FrameTimestamp);
 				}
 				finally
 				{
@@ -397,7 +399,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				break;
 			}
 
-			var tsMs = _clock.ElapsedMilliseconds;
+			var tsMs = Interlocked.Read(ref _lastSubmittedFrameTs);
+			if (tsMs <= 0)
+			{
+				tsMs = _clock.ElapsedMilliseconds;
+			}
 			var packets = _packetizer.Push(readBuffer.AsSpan(0, bytesRead), tsMs, tsMs);
 			for (var i = 0; i < packets.Count; i++)
 			{
@@ -407,7 +413,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			}
 		}
 
-		var endTsMs = _clock.ElapsedMilliseconds;
+		var endTsMs = Interlocked.Read(ref _lastSubmittedFrameTs);
+		if (endTsMs <= 0)
+		{
+			endTsMs = _clock.ElapsedMilliseconds;
+		}
 		var tail = _packetizer.Flush(endTsMs, endTsMs);
 		for (var i = 0; i < tail.Count; i++)
 		{
@@ -456,5 +466,5 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		return "ffmpeg";
 	}
 
-	private readonly record struct PendingInput(byte[] Buffer, int Count);
+	private readonly record struct PendingInput(byte[] Buffer, int Count, long FrameTimestamp);
 }
