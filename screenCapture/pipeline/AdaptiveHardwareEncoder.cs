@@ -59,10 +59,16 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 	{
 		if (_active != null)
 		{
-			return $"active={_active.BackendName};detail={_active.GetDebugStatus()};startupErrors={_startupErrors.Count}";
+			var errors = _startupErrors.Count == 0
+				? "none"
+				: string.Join("|", _startupErrors.Take(3));
+			return $"active={_active.BackendName};detail={_active.GetDebugStatus()};startupErrors={_startupErrors.Count};errors={errors}";
 		}
 
-		return $"inactive;startupErrors={_startupErrors.Count}";
+		var inactiveErrors = _startupErrors.Count == 0
+			? "none"
+			: string.Join("|", _startupErrors.Take(3));
+		return $"inactive;startupErrors={_startupErrors.Count};errors={inactiveErrors}";
 	}
 
 	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
