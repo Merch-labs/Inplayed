@@ -28,6 +28,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private Task? _stderrTask;
 	private EncodedPacketRingBuffer? _ringBuffer;
 	private bool _running;
+	private Stopwatch _clock = new();
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -48,6 +49,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_inputHeight = Math.Max(1, settings.Height);
 			_device = D3D11Helper.CreateDevice();
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
+			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
 			_running = true;
 		}
@@ -309,14 +311,16 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				break;
 			}
 
-			var packets = _packetizer.Push(readBuffer.AsSpan(0, bytesRead), 0, 0);
+			var tsMs = _clock.ElapsedMilliseconds;
+			var packets = _packetizer.Push(readBuffer.AsSpan(0, bytesRead), tsMs, tsMs);
 			for (var i = 0; i < packets.Count; i++)
 			{
 				_ringBuffer.Append(packets[i]);
 			}
 		}
 
-		var tail = _packetizer.Flush(0, 0);
+		var endTsMs = _clock.ElapsedMilliseconds;
+		var tail = _packetizer.Flush(endTsMs, endTsMs);
 		for (var i = 0; i < tail.Count; i++)
 		{
 			_ringBuffer.Append(tail[i]);

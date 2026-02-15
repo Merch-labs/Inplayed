@@ -15,34 +15,35 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 	public void Append(EncodedPacket packet)
 	{
 		var data = packet.Data.ToArray();
-		var now = DateTime.UtcNow;
+		var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		var packetTimeMs = packet.PresentationTimestamp > 0 ? packet.PresentationTimestamp : nowMs;
 		var node = new BufferedPacket(
 			new EncodedPacket(data, packet.PresentationTimestamp, packet.DecodeTimestamp, packet.IsKeyFrame),
-			now);
+			packetTimeMs);
 
 		lock (_gate)
 		{
 			_packets.AddLast(node);
 			_bytes += data.Length;
-			TrimLocked(now, _retention);
+			TrimLocked(packetTimeMs, _retention);
 			TrimBytesLocked();
 		}
 	}
 
 	public EncodedPacketSnapshot SnapshotLast(TimeSpan duration)
 	{
-		var now = DateTime.UtcNow;
+		var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 		var keep = duration <= TimeSpan.Zero ? _retention : duration;
 
 		lock (_gate)
 		{
-			TrimLocked(now, _retention);
+			TrimLocked(nowMs, _retention);
 
-			var minTime = now - keep;
+			var minTimeMs = nowMs - (long)keep.TotalMilliseconds;
 			var list = new List<EncodedPacket>(_packets.Count);
 			for (var node = _packets.First; node != null; node = node.Next)
 			{
-				if (node.Value.ArrivalUtc >= minTime)
+				if (node.Value.TimestampMs >= minTimeMs)
 				{
 					list.Add(node.Value.Packet);
 				}
@@ -104,10 +105,10 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 		return data[idx] & 0x1F;
 	}
 
-	private void TrimLocked(DateTime now, TimeSpan keep)
+	private void TrimLocked(long nowMs, TimeSpan keep)
 	{
-		var cutoff = now - keep;
-		while (_packets.First != null && _packets.First.Value.ArrivalUtc < cutoff)
+		var cutoffMs = nowMs - (long)keep.TotalMilliseconds;
+		while (_packets.First != null && _packets.First.Value.TimestampMs < cutoffMs)
 		{
 			var removed = _packets.First.Value;
 			_bytes -= removed.Packet.Data.Length;
@@ -125,5 +126,5 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 		}
 	}
 
-	private readonly record struct BufferedPacket(EncodedPacket Packet, DateTime ArrivalUtc);
+	private readonly record struct BufferedPacket(EncodedPacket Packet, long TimestampMs);
 }
