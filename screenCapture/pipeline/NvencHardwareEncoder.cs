@@ -107,6 +107,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private uint _functionListVersion;
 	private int _createInstanceRc;
 	private int _functionPointerCount;
+	private IntPtr _openSessionPtr;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -215,8 +216,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 
 		_functionPointerCount = NvencFunctionList.CountNonZeroPointerSlots(_functionListBuffer, 96);
+		if (!NvencApiBootstrap.TryReadOpenSessionPointer(_functionListBuffer, out _openSessionPtr, out var openPtrMsg))
+		{
+			_status = $"create_instance_ok_but_open_session_missing:{openPtrMsg}";
+			throw new NotSupportedException($"NVENC bootstrap failed: {openPtrMsg}");
+		}
 
-		_status = $"create_instance_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
+		_status = $"create_instance_ok_fnptrs={_functionPointerCount}_openSession=0x{_openSessionPtr.ToInt64():X}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -242,7 +248,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X}";
 	}
 
 	public void Stop()
@@ -284,6 +290,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		NvencFunctionList.Free(ref _functionListBuffer);
 		_functionListVersion = 0;
 		_functionPointerCount = 0;
+		_openSessionPtr = IntPtr.Zero;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
