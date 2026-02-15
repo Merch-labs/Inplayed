@@ -48,6 +48,21 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 				}
 			}
 
+			var keyframeIndex = 0;
+			for (var i = 0; i < list.Count; i++)
+			{
+				if (list[i].IsKeyFrame)
+				{
+					keyframeIndex = i;
+					break;
+				}
+			}
+
+			if (keyframeIndex > 0)
+			{
+				list = list.Skip(keyframeIndex).ToList();
+			}
+
 			return new EncodedPacketSnapshot(list);
 		}
 	}
