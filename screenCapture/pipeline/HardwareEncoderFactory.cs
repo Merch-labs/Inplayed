@@ -3,6 +3,7 @@ public static class HardwareEncoderFactory
 	public static IHardwareEncoder Create(RecordingSettings settings)
 	{
 		_ = settings;
+		var forced = Environment.GetEnvironmentVariable("INPLAYED_ENCODER")?.Trim().ToLowerInvariant();
 		var strictGpuOnly = string.Equals(
 			Environment.GetEnvironmentVariable("INPLAYED_STRICT_GPU"),
 			"1",
@@ -11,6 +12,34 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
 			"1",
 			StringComparison.Ordinal);
+
+		if (!string.IsNullOrWhiteSpace(forced))
+		{
+			Console.WriteLine($"Encoder forced by INPLAYED_ENCODER={forced}");
+			switch (forced)
+			{
+				case "nvenc_native":
+					return new AdaptiveHardwareEncoder(
+						() => new NvencHardwareEncoder(),
+						() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
+						() => new FfmpegPacketRingHardwareEncoder("libx264"),
+						() => new CpuReadbackHardwareEncoder("libx264"));
+				case "nvenc_packet":
+					return new AdaptiveHardwareEncoder(
+						() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
+						() => new FfmpegPacketRingHardwareEncoder("libx264"),
+						() => new CpuReadbackHardwareEncoder("libx264"));
+				case "x264_packet":
+					return new AdaptiveHardwareEncoder(
+						() => new FfmpegPacketRingHardwareEncoder("libx264"),
+						() => new CpuReadbackHardwareEncoder("libx264"));
+				case "cpu":
+					return new CpuReadbackHardwareEncoder("libx264");
+				default:
+					Console.WriteLine("Unknown INPLAYED_ENCODER value. Falling back to auto selection.");
+					break;
+			}
+		}
 
 		if (FfmpegCapabilities.SupportsEncoder("h264_nvenc"))
 		{
