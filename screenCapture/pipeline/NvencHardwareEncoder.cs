@@ -1,12 +1,29 @@
+using System.Runtime.InteropServices;
+
 public sealed class NvencHardwareEncoder : IHardwareEncoder
 {
-	public string BackendName => "NvencNative:Unavailable";
+	public string BackendName => "NvencNative";
+	private string _status = "uninitialized";
+	private IntPtr _nvencLib;
 
 	public void Start(RecordingSettings settings)
 	{
 		_ = settings;
-		throw new NotSupportedException(
-			"Native NVENC backend is not implemented yet. Use ffmpeg packet-ring backend for now.");
+		if (!NativeNvencProbe.TryLoad(out _nvencLib, out var message))
+		{
+			_status = $"probe_failed:{message}";
+			throw new NotSupportedException($"NVENC probe failed: {message}");
+		}
+
+		if (!NativeNvencProbe.HasCreateInstanceExport(_nvencLib, out message))
+		{
+			_status = $"invalid_runtime:{message}";
+			throw new NotSupportedException($"NVENC runtime missing required export: {message}");
+		}
+
+		_status = "runtime_loaded_but_not_implemented";
+		throw new NotImplementedException(
+			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
 
 	public void Encode(TextureFrameRef frame)
@@ -30,7 +47,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return "native_nvenc=not_implemented";
+		return _status;
 	}
 
 	public void Stop()
@@ -39,5 +56,17 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public void Dispose()
 	{
+		if (_nvencLib != IntPtr.Zero)
+		{
+			try
+			{
+				NativeLibrary.Free(_nvencLib);
+			}
+			catch
+			{
+			}
+
+			_nvencLib = IntPtr.Zero;
+		}
 	}
 }
