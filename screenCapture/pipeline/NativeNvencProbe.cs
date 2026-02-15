@@ -44,4 +44,36 @@ internal static class NativeNvencProbe
 		message = "ok";
 		return true;
 	}
+
+	public static bool TryBindCreateInstance(
+		IntPtr libraryHandle,
+		out NvencNative.NvEncodeApiCreateInstanceDelegate? createInstance,
+		out string message)
+	{
+		createInstance = null;
+		message = "unknown";
+		if (libraryHandle == IntPtr.Zero)
+		{
+			message = "library handle is zero";
+			return false;
+		}
+
+		if (!NativeLibrary.TryGetExport(libraryHandle, "NvEncodeAPICreateInstance", out var proc))
+		{
+			message = "missing NvEncodeAPICreateInstance export";
+			return false;
+		}
+
+		try
+		{
+			createInstance = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncodeApiCreateInstanceDelegate>(proc);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }

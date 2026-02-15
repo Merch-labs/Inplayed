@@ -5,6 +5,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	public string BackendName => "NvencNative";
 	private string _status = "uninitialized";
 	private IntPtr _nvencLib;
+	private NvencNative.NvEncodeApiCreateInstanceDelegate? _createInstance;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -21,7 +22,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC runtime missing required export: {message}");
 		}
 
-		_status = "runtime_loaded_but_not_implemented";
+		if (!NativeNvencProbe.TryBindCreateInstance(_nvencLib, out _createInstance, out message))
+		{
+			_status = $"bind_failed:{message}";
+			throw new NotSupportedException($"NVENC runtime export bind failed: {message}");
+		}
+
+		_status = "runtime_bound_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -68,5 +75,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 			_nvencLib = IntPtr.Zero;
 		}
+
+		_createInstance = null;
 	}
 }
