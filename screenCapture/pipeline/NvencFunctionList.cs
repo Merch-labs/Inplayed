@@ -32,6 +32,36 @@ internal static class NvencFunctionList
 		ptr = IntPtr.Zero;
 	}
 
+	public static int CountNonZeroPointerSlots(IntPtr functionListPtr, int maxSlots = 64)
+	{
+		if (functionListPtr == IntPtr.Zero || maxSlots <= 0)
+		{
+			return 0;
+		}
+
+		var headerBytes = sizeof(uint);
+		var pointerSize = IntPtr.Size;
+		var count = 0;
+		for (var i = 0; i < maxSlots; i++)
+		{
+			var offset = headerBytes + (i * pointerSize);
+			if (offset + pointerSize > FunctionListBufferBytes)
+			{
+				break;
+			}
+
+			IntPtr value = pointerSize == 8
+				? new IntPtr(Marshal.ReadInt64(functionListPtr, offset))
+				: new IntPtr(Marshal.ReadInt32(functionListPtr, offset));
+			if (value != IntPtr.Zero)
+			{
+				count++;
+			}
+		}
+
+		return count;
+	}
+
 	private static uint SelectStructVersion(uint maxSupportedVersion)
 	{
 		var reported = (maxSupportedVersion >> 16) & 0xFFFF;

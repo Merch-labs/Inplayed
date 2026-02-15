@@ -85,6 +85,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private IntPtr _functionListBuffer;
 	private uint _functionListVersion;
 	private int _createInstanceRc;
+	private int _functionPointerCount;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -192,7 +193,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NvEncodeAPICreateInstance failed: {rcName}");
 		}
 
-		_status = $"create_instance_ok_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
+		_functionPointerCount = NvencFunctionList.CountNonZeroPointerSlots(_functionListBuffer, 96);
+
+		_status = $"create_instance_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -218,7 +221,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount}";
 	}
 
 	public void Stop()
@@ -259,6 +262,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_cuDriverGetVersion = null;
 		NvencFunctionList.Free(ref _functionListBuffer);
 		_functionListVersion = 0;
+		_functionPointerCount = 0;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
