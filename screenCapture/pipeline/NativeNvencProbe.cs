@@ -77,6 +77,38 @@ internal static class NativeNvencProbe
 		}
 	}
 
+	public static bool TryBindGetMaxSupportedVersion(
+		IntPtr libraryHandle,
+		out NvencNative.NvEncodeApiGetMaxSupportedVersionDelegate? getMaxVersion,
+		out string message)
+	{
+		getMaxVersion = null;
+		message = "unknown";
+		if (libraryHandle == IntPtr.Zero)
+		{
+			message = "library handle is zero";
+			return false;
+		}
+
+		if (!NativeLibrary.TryGetExport(libraryHandle, "NvEncodeAPIGetMaxSupportedVersion", out var proc))
+		{
+			message = "missing NvEncodeAPIGetMaxSupportedVersion export";
+			return false;
+		}
+
+		try
+		{
+			getMaxVersion = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncodeApiGetMaxSupportedVersionDelegate>(proc);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
+
 	public static bool TryLoadCuda(out IntPtr cudaHandle, out string message)
 	{
 		cudaHandle = IntPtr.Zero;

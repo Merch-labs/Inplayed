@@ -7,6 +7,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private IntPtr _nvencLib;
 	private IntPtr _cudaLib;
 	private NvencNative.NvEncodeApiCreateInstanceDelegate? _createInstance;
+	private NvencNative.NvEncodeApiGetMaxSupportedVersionDelegate? _getMaxSupportedVersion;
+	private uint _maxSupportedVersion;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -35,13 +37,33 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC runtime export bind failed: {message}");
 		}
 
+		if (!NativeNvencProbe.TryBindGetMaxSupportedVersion(_nvencLib, out _getMaxSupportedVersion, out message))
+		{
+			_status = $"bind_failed:{message}";
+			throw new NotSupportedException($"NVENC max-version export bind failed: {message}");
+		}
+
 		if (!NativeNvencProbe.TryLoadCuda(out _cudaLib, out message))
 		{
 			_status = $"cuda_missing:{message}";
 			throw new NotSupportedException($"CUDA runtime probe failed: {message}");
 		}
 
-		_status = "runtime_bound_cuda_loaded_but_not_implemented";
+		var getMaxVersion = _getMaxSupportedVersion;
+		if (getMaxVersion == null)
+		{
+			_status = "max_version_delegate_null";
+			throw new NotSupportedException("NVENC max supported version delegate is null.");
+		}
+
+		var rc = getMaxVersion(out _maxSupportedVersion);
+		if (rc != 0)
+		{
+			_status = $"max_version_query_failed:0x{rc:X8}";
+			throw new NotSupportedException($"NVENC max supported version query failed: 0x{rc:X8}");
+		}
+
+		_status = $"runtime_bound_cuda_loaded_maxver=0x{_maxSupportedVersion:X8}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -103,5 +125,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 
 		_createInstance = null;
+		_getMaxSupportedVersion = null;
+		_maxSupportedVersion = 0;
 	}
 }
