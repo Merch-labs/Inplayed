@@ -6,10 +6,10 @@ public static class HardwareEncoderFactory
 		if (FfmpegCapabilities.SupportsEncoder("h264_nvenc"))
 		{
 			Console.WriteLine("Encoder selected: h264_nvenc (ffmpeg)");
-			return new CpuReadbackHardwareEncoder("h264_nvenc");
+			return new FfmpegPacketRingHardwareEncoder("h264_nvenc");
 		}
 
 		Console.WriteLine("Encoder selected: libx264 (ffmpeg)");
-		return new CpuReadbackHardwareEncoder("libx264");
+		return new FfmpegPacketRingHardwareEncoder("libx264");
 	}
 }
