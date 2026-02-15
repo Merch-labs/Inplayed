@@ -11,6 +11,7 @@ public sealed class CaptureManager : IDisposable
 	private CancellationTokenSource? _cts;
 	private Task? _encodeTask;
 	private bool _running;
+	private long _enqueuedFrames;
 	private long _encodedFrames;
 	private long _droppedFrames;
 
@@ -89,7 +90,11 @@ public sealed class CaptureManager : IDisposable
 
 	private void OnFrameArrived(TextureFrameRef frame)
 	{
-		if (!_frameQueue.Writer.TryWrite(frame))
+		if (_frameQueue.Writer.TryWrite(frame))
+		{
+			Interlocked.Increment(ref _enqueuedFrames);
+		}
+		else
 		{
 			Interlocked.Increment(ref _droppedFrames);
 			frame.Dispose();
@@ -125,6 +130,15 @@ public sealed class CaptureManager : IDisposable
 		return (
 			Interlocked.Read(ref _encodedFrames),
 			Interlocked.Read(ref _droppedFrames));
+	}
+
+	public (long enqueuedFrames, long encodedFrames, long droppedFrames, long pendingFrames) GetExtendedStats()
+	{
+		var enqueued = Interlocked.Read(ref _enqueuedFrames);
+		var encoded = Interlocked.Read(ref _encodedFrames);
+		var dropped = Interlocked.Read(ref _droppedFrames);
+		var pending = Math.Max(0, enqueued - encoded);
+		return (enqueued, encoded, dropped, pending);
 	}
 
 	public void Dispose()

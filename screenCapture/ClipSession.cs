@@ -92,9 +92,9 @@ public sealed class ClipSession : IDisposable
 			return "inactive";
 		}
 
-		var (encoded, dropped) = _captureManager.GetStats();
+		var (enqueued, encoded, dropped, pending) = _captureManager.GetExtendedStats();
 		var encoderDebug = _encoder.GetDebugStatus();
-		return $"backend={_encoder.BackendName};encoded={encoded};dropped={dropped};encoder={encoderDebug}";
+		return $"backend={_encoder.BackendName};enqueued={enqueued};encoded={encoded};pending={pending};dropped={dropped};encoder={encoderDebug}";
 	}
 
 	public void Dispose()
