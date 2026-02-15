@@ -30,4 +30,31 @@ internal static class NvencApiBootstrap
 		message = "ok";
 		return true;
 	}
+
+	public static bool TryBindOpenSessionDelegate(
+		IntPtr openSessionPtr,
+		out NvencNative.NvEncOpenEncodeSessionExDelegate? openSessionDelegate,
+		out string message)
+	{
+		openSessionDelegate = null;
+		message = "unknown";
+		if (openSessionPtr == IntPtr.Zero)
+		{
+			message = "openSession pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			openSessionDelegate = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncOpenEncodeSessionExDelegate>(
+				openSessionPtr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }

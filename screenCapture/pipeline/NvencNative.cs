@@ -14,6 +14,9 @@ internal static class NvencNative
 	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
 	public delegate int NvEncodeApiGetMaxSupportedVersionDelegate(out uint version);
 
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncOpenEncodeSessionExDelegate(IntPtr openSessionExParams, out IntPtr encoderSession);
+
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	public delegate int CuInitDelegate(uint flags);
 
