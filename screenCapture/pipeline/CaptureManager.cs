@@ -58,15 +58,14 @@ public sealed class CaptureManager : IDisposable
 			_running = false;
 			_source.FrameArrived -= OnFrameArrived;
 			_source.ResolutionChanged -= OnResolutionChanged;
-			_frameQueue.Writer.TryComplete();
 			cts = _cts;
 			encodeTask = _encodeTask;
 			_cts = null;
 			_encodeTask = null;
 		}
 
-		cts?.Cancel();
 		await _source.StopAsync();
+		_frameQueue.Writer.TryComplete();
 
 		if (encodeTask != null)
 		{
@@ -81,6 +80,7 @@ public sealed class CaptureManager : IDisposable
 		}
 
 		_encoder.Stop();
+		cts?.Cancel();
 		cts?.Dispose();
 	}
 
@@ -99,12 +99,19 @@ public sealed class CaptureManager : IDisposable
 
 	private async Task EncodeLoop(CancellationToken token)
 	{
-		await foreach (var frame in _frameQueue.Reader.ReadAllAsync(token))
+		try
 		{
-			using (frame)
+			await foreach (var frame in _frameQueue.Reader.ReadAllAsync(token))
 			{
-				_encoder.Encode(frame);
+				using (frame)
+				{
+					_encoder.Encode(frame);
+				}
 			}
+		}
+		catch (OperationCanceledException) when (token.IsCancellationRequested)
+		{
+			// shutdown path
 		}
 	}
 
