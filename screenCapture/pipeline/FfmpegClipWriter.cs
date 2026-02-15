@@ -22,26 +22,16 @@ public sealed class FfmpegClipWriter : IClipWriter
 			Directory.CreateDirectory(outputDir);
 		}
 
-		var tempStream = Path.Combine(Path.GetTempPath(), $"inplayed_{Guid.NewGuid():N}.h264");
 		try
 		{
-			using (var fs = new FileStream(tempStream, FileMode.Create, FileAccess.Write, FileShare.Read))
-			{
-				foreach (var packet in snapshot.Packets)
-				{
-					token.ThrowIfCancellationRequested();
-					var data = packet.Data.Span;
-					fs.Write(data);
-				}
-			}
-
 			var ffmpegPath = ResolveFfmpegPath();
-			var args = $"-y -f h264 -i \"{tempStream}\" -c copy \"{outputPath}\"";
+			var args = $"-y -f h264 -i pipe:0 -c copy \"{outputPath}\"";
 			var psi = new ProcessStartInfo
 			{
 				FileName = ffmpegPath,
 				Arguments = args,
 				UseShellExecute = false,
+				RedirectStandardInput = true,
 				RedirectStandardError = true,
 				CreateNoWindow = true
 			};
@@ -50,6 +40,18 @@ public sealed class FfmpegClipWriter : IClipWriter
 			if (process == null)
 			{
 				throw new InvalidOperationException("Failed to start ffmpeg process.");
+			}
+
+			using (var stdin = process.StandardInput.BaseStream)
+			{
+				foreach (var packet in snapshot.Packets)
+				{
+					token.ThrowIfCancellationRequested();
+					var data = packet.Data.Span;
+					stdin.Write(data);
+				}
+
+				stdin.Flush();
 			}
 
 			var stderr = process.StandardError.ReadToEnd();
@@ -64,20 +66,6 @@ public sealed class FfmpegClipWriter : IClipWriter
 		{
 			throw new InvalidOperationException(
 				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, or install ffmpeg on PATH.");
-		}
-		finally
-		{
-			try
-			{
-				if (File.Exists(tempStream))
-				{
-					File.Delete(tempStream);
-				}
-			}
-			catch
-			{
-				// best effort cleanup
-			}
 		}
 	}
 
