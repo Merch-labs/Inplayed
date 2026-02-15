@@ -4,6 +4,7 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 
 	private readonly Func<IHardwareEncoder>[] _candidates;
 	private IHardwareEncoder? _active;
+	private readonly List<string> _startupErrors = new();
 
 	public AdaptiveHardwareEncoder(params Func<IHardwareEncoder>[] candidates)
 	{
@@ -15,6 +16,7 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 	public void Start(RecordingSettings settings)
 	{
 		Exception? last = null;
+		_startupErrors.Clear();
 		foreach (var create in _candidates)
 		{
 			IHardwareEncoder? encoder = null;
@@ -29,6 +31,7 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 			catch (Exception ex)
 			{
 				last = ex;
+				_startupErrors.Add($"{encoder?.GetType().Name ?? "unknown"}:{ex.GetType().Name}:{ex.Message}");
 				try
 				{
 					encoder?.Dispose();
@@ -54,7 +57,12 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return _active?.GetDebugStatus() ?? "inactive";
+		if (_active != null)
+		{
+			return $"active={_active.BackendName};detail={_active.GetDebugStatus()};startupErrors={_startupErrors.Count}";
+		}
+
+		return $"inactive;startupErrors={_startupErrors.Count}";
 	}
 
 	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)

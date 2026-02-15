@@ -3,6 +3,10 @@ public static class HardwareEncoderFactory
 	public static IHardwareEncoder Create(RecordingSettings settings)
 	{
 		_ = settings;
+		var strictGpuOnly = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_STRICT_GPU"),
+			"1",
+			StringComparison.Ordinal);
 		var enableNativeNvenc = string.Equals(
 			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
 			"1",
@@ -17,8 +21,15 @@ public static class HardwareEncoderFactory
 				return new AdaptiveHardwareEncoder(
 					() => new NvencHardwareEncoder(),
 					() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
-					() => new FfmpegPacketRingHardwareEncoder("libx264"),
-					() => new CpuReadbackHardwareEncoder("libx264"));
+					() => new FfmpegPacketRingHardwareEncoder("libx264"));
+			}
+
+			if (strictGpuOnly)
+			{
+				Console.WriteLine("Strict GPU mode enabled; CPU fallback disabled");
+				return new AdaptiveHardwareEncoder(
+					() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
+					() => new FfmpegPacketRingHardwareEncoder("libx264"));
 			}
 
 			return new AdaptiveHardwareEncoder(
@@ -28,6 +39,13 @@ public static class HardwareEncoderFactory
 		}
 
 		Console.WriteLine("Encoder preferred: libx264 (ffmpeg packet ring)");
+		if (strictGpuOnly)
+		{
+			Console.WriteLine("Strict GPU mode enabled; CPU fallback disabled");
+			return new AdaptiveHardwareEncoder(
+				() => new FfmpegPacketRingHardwareEncoder("libx264"));
+		}
+
 		return new AdaptiveHardwareEncoder(
 			() => new FfmpegPacketRingHardwareEncoder("libx264"),
 			() => new CpuReadbackHardwareEncoder("libx264"));
