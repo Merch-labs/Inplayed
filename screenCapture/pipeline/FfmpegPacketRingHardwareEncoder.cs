@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Buffers;
+using System.Threading;
 using Vortice.Direct3D11;
 
 public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
@@ -30,6 +31,10 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private EncodedPacketRingBuffer? _ringBuffer;
 	private bool _running;
 	private Stopwatch _clock = new();
+	private long _inputBytes;
+	private long _packetBytes;
+	private long _packetCount;
+	private long _restartCount;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -103,6 +108,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 					}
 
 					_stdin.Write(buffer, 0, totalBytes);
+					Interlocked.Add(ref _inputBytes, totalBytes);
 				}
 				finally
 				{
@@ -144,6 +150,15 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 
 		return _clipWriter.WriteAsync(outputPath, snapshot, token);
+	}
+
+	public string GetDebugStatus()
+	{
+		lock (_gate)
+		{
+			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)}";
+		}
 	}
 
 	public void Stop()
@@ -225,6 +240,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 		_inputWidth = Math.Max(1, width);
 		_inputHeight = Math.Max(1, height);
+		Interlocked.Increment(ref _restartCount);
 		StartFfmpegLocked(_settings, _videoCodec, _inputWidth, _inputHeight);
 	}
 
@@ -325,6 +341,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			for (var i = 0; i < packets.Count; i++)
 			{
 				_ringBuffer.Append(packets[i]);
+				Interlocked.Increment(ref _packetCount);
+				Interlocked.Add(ref _packetBytes, packets[i].Data.Length);
 			}
 		}
 
@@ -333,6 +351,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		for (var i = 0; i < tail.Count; i++)
 		{
 			_ringBuffer.Append(tail[i]);
+			Interlocked.Increment(ref _packetCount);
+			Interlocked.Add(ref _packetBytes, tail[i].Data.Length);
 		}
 	}
 

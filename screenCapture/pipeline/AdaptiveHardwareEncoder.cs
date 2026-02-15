@@ -52,6 +52,11 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 		_active?.Reconfigure(width, height);
 	}
 
+	public string GetDebugStatus()
+	{
+		return _active?.GetDebugStatus() ?? "inactive";
+	}
+
 	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
 	{
 		if (_active == null)

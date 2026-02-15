@@ -15,6 +15,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 	private int _stagingHeight;
 	private int _outputWidth;
 	private int _outputHeight;
+	private long _encodedFrames;
 
 	public CpuReadbackHardwareEncoder(string videoCodec = "libx264")
 	{
@@ -70,6 +71,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 				}
 
 				_encoder.PushFrame(new VideoFrame(buffer, width, height, frame.Timestamp));
+				_encodedFrames++;
 			}
 			finally
 			{
@@ -89,6 +91,14 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 
 	public void Stop()
 	{
+	}
+
+	public string GetDebugStatus()
+	{
+		lock (_gate)
+		{
+			return $"codec={_videoCodec};frames={_encodedFrames};output={_outputWidth}x{_outputHeight}";
+		}
 	}
 
 	public Task FlushRecentAsync(string path, TimeSpan clipLength, CancellationToken token = default)

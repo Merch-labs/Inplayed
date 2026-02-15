@@ -77,7 +77,8 @@ public sealed class ClipSession : IDisposable
 		}
 
 		var (encoded, dropped) = _captureManager.GetStats();
-		return $"backend={_encoder.BackendName};encoded={encoded};dropped={dropped}";
+		var encoderDebug = _encoder.GetDebugStatus();
+		return $"backend={_encoder.BackendName};encoded={encoded};dropped={dropped};encoder={encoderDebug}";
 	}
 
 	public void Dispose()

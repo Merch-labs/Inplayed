@@ -81,6 +81,14 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 		}
 	}
 
+	public (int packetCount, long totalBytes) GetStats()
+	{
+		lock (_gate)
+		{
+			return (_packets.Count, _bytes);
+		}
+	}
+
 	private static int GetNalType(ReadOnlySpan<byte> data)
 	{
 		if (data.Length < 5)
