@@ -202,9 +202,10 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		var fps = Math.Max(1, settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
 		var ffmpegPath = ResolveFfmpegPath();
+		var codecArgs = BuildCodecArgs(codec, fps, bitrate);
 		var args =
 			$"-hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
-			$"-i pipe:0 -an -c:v {codec} -preset p1 -tune ll -g {fps * 2} -bf 0 -b:v {bitrate} -f h264 pipe:1";
+			$"-i pipe:0 -an {codecArgs} -f h264 pipe:1";
 
 		var psi = new ProcessStartInfo
 		{
@@ -234,6 +235,21 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			throw new InvalidOperationException(
 				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, or install ffmpeg on PATH.");
 		}
+	}
+
+	private static string BuildCodecArgs(string codec, int fps, int bitrate)
+	{
+		if (codec.Contains("nvenc", StringComparison.OrdinalIgnoreCase))
+		{
+			return $"-c:v {codec} -preset p1 -tune ll -g {fps * 2} -bf 0 -b:v {bitrate}";
+		}
+
+		if (codec.Equals("libx264", StringComparison.OrdinalIgnoreCase))
+		{
+			return $"-c:v libx264 -preset veryfast -tune zerolatency -g {fps * 2} -bf 0 -b:v {bitrate}";
+		}
+
+		return $"-c:v {codec} -g {fps * 2} -bf 0 -b:v {bitrate}";
 	}
 
 	private async Task ReadEncodedStdoutLoop()

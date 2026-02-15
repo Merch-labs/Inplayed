@@ -60,11 +60,48 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 
 			if (keyframeIndex > 0)
 			{
-				list = list.Skip(keyframeIndex).ToList();
+				var start = keyframeIndex;
+				for (var i = keyframeIndex - 1; i >= 0; i--)
+				{
+					var nalType = GetNalType(list[i].Data.Span);
+					if (nalType == 7 || nalType == 8 || nalType == 6 || nalType == 9)
+					{
+						start = i;
+						continue;
+					}
+
+					break;
+				}
+
+				list = list.Skip(start).ToList();
 			}
 
 			return new EncodedPacketSnapshot(list);
 		}
+	}
+
+	private static int GetNalType(ReadOnlySpan<byte> data)
+	{
+		if (data.Length < 5)
+		{
+			return -1;
+		}
+
+		var idx = 0;
+		if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01)
+		{
+			idx = 3;
+		}
+		else if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01)
+		{
+			idx = 4;
+		}
+		else
+		{
+			return -1;
+		}
+
+		return data[idx] & 0x1F;
 	}
 
 	private void TrimLocked(DateTime now, TimeSpan keep)
