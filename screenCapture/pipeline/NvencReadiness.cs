@@ -3,4 +3,5 @@ public readonly record struct NvencReadiness(
 	string Summary,
 	uint MaxSupportedVersion,
 	int CudaDriverVersion,
-	int FunctionPointerCount);
+	int FunctionPointerCount,
+	bool RequiredSlotsPresent);

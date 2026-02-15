@@ -12,10 +12,10 @@ public static class HardwareEncoderFactory
 			"1",
 			StringComparison.Ordinal);
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
-		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0);
+		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false);
 		var hasNvencFfmpeg = FfmpegCapabilities.SupportsEncoder("h264_nvenc");
 
-		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount}";
+		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent}";
 	}
 
 	public static IHardwareEncoder Create(RecordingSettings settings)
@@ -31,7 +31,7 @@ public static class HardwareEncoderFactory
 			"1",
 			StringComparison.Ordinal);
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
-		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0);
+		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false);
 
 		if (!string.IsNullOrWhiteSpace(forced))
 		{
