@@ -26,10 +26,25 @@ public sealed class ClipSession : IDisposable
 		_encoder = HardwareEncoderFactory.Create(Settings);
 		_captureManager = new CaptureManager(_captureSource, _encoder);
 
-		await _captureManager.StartAsync(Settings, _cts.Token);
+		try
+		{
+			await _captureManager.StartAsync(Settings, _cts.Token);
+			StatusChanged?.Invoke($"encoder:{_encoder.BackendName}");
+			StatusChanged?.Invoke("running");
+		}
+		catch (Exception ex)
+		{
+			StatusChanged?.Invoke($"failed:{ex.GetType().Name}:{ex.Message}");
+			try
+			{
+				await StopAsync();
+			}
+			catch
+			{
+			}
 
-		StatusChanged?.Invoke($"encoder:{_encoder.BackendName}");
-		StatusChanged?.Invoke("running");
+			throw;
+		}
 	}
 
 	public async Task StopAsync()
