@@ -69,6 +69,17 @@ public sealed class ClipSession : IDisposable
 			CancellationToken.None);
 	}
 
+	public string GetDebugStatus()
+	{
+		if (_captureManager == null || _encoder == null)
+		{
+			return "inactive";
+		}
+
+		var (encoded, dropped) = _captureManager.GetStats();
+		return $"backend={_encoder.BackendName};encoded={encoded};dropped={dropped}";
+	}
+
 	public void Dispose()
 	{
 		StopAsync().GetAwaiter().GetResult();

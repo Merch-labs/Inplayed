@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using System.Threading;
 
 public sealed class CaptureManager : IDisposable
 {
@@ -10,6 +11,8 @@ public sealed class CaptureManager : IDisposable
 	private CancellationTokenSource? _cts;
 	private Task? _encodeTask;
 	private bool _running;
+	private long _encodedFrames;
+	private long _droppedFrames;
 
 	public CaptureManager(ICaptureSource source, IHardwareEncoder encoder, int queueSize = 4)
 	{
@@ -88,6 +91,7 @@ public sealed class CaptureManager : IDisposable
 	{
 		if (!_frameQueue.Writer.TryWrite(frame))
 		{
+			Interlocked.Increment(ref _droppedFrames);
 			frame.Dispose();
 		}
 	}
@@ -106,6 +110,7 @@ public sealed class CaptureManager : IDisposable
 				using (frame)
 				{
 					_encoder.Encode(frame);
+					Interlocked.Increment(ref _encodedFrames);
 				}
 			}
 		}
@@ -113,6 +118,13 @@ public sealed class CaptureManager : IDisposable
 		{
 			// shutdown path
 		}
+	}
+
+	public (long encodedFrames, long droppedFrames) GetStats()
+	{
+		return (
+			Interlocked.Read(ref _encodedFrames),
+			Interlocked.Read(ref _droppedFrames));
 	}
 
 	public void Dispose()
