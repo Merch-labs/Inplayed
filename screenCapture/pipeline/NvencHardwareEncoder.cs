@@ -84,6 +84,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private int _cudaDriverVersion;
 	private IntPtr _functionListBuffer;
 	private uint _functionListVersion;
+	private int _createInstanceRc;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -176,7 +177,22 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 
 		_functionListBuffer = NvencFunctionList.Allocate(_maxSupportedVersion, out _functionListVersion);
-		_status = $"runtime_bound_cuda_ok(cu={FormatCudaDriverVersion(_cudaDriverVersion)})_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
+		var createInstance = _createInstance;
+		if (createInstance == null)
+		{
+			_status = "create_instance_delegate_null";
+			throw new NotSupportedException("NVENC create-instance delegate is null.");
+		}
+
+		_createInstanceRc = createInstance(_functionListBuffer);
+		if (_createInstanceRc != 0)
+		{
+			var rcName = NvencNative.ResultToString(_createInstanceRc);
+			_status = $"create_instance_failed:{rcName}";
+			throw new NotSupportedException($"NvEncodeAPICreateInstance failed: {rcName}");
+		}
+
+		_status = $"create_instance_ok_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -202,7 +218,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)}";
 	}
 
 	public void Stop()
@@ -245,6 +261,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_functionListVersion = 0;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
+		_createInstanceRc = 0;
 	}
 
 	private static string FormatVersionWords(uint version)
