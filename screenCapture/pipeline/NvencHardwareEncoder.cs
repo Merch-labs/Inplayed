@@ -109,6 +109,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private int _functionPointerCount;
 	private IntPtr _openSessionPtr;
 	private NvencNative.NvEncOpenEncodeSessionExDelegate? _openSession;
+	private IntPtr _getEncodeGuidCountPtr;
+	private IntPtr _getEncodeProfileGuidCountPtr;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -223,6 +225,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC bootstrap failed: {openPtrMsg}");
 		}
 
+		_getEncodeGuidCountPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 1);
+		_getEncodeProfileGuidCountPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 2);
+
 		if (!NvencApiBootstrap.TryBindOpenSessionDelegate(_openSessionPtr, out _openSession, out openPtrMsg))
 		{
 			_status = $"open_session_bind_failed:{openPtrMsg}";
@@ -255,7 +260,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X}";
 	}
 
 	public void Stop()
@@ -299,6 +304,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_functionPointerCount = 0;
 		_openSessionPtr = IntPtr.Zero;
 		_openSession = null;
+		_getEncodeGuidCountPtr = IntPtr.Zero;
+		_getEncodeProfileGuidCountPtr = IntPtr.Zero;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
