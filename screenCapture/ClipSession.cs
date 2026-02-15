@@ -1,112 +1,67 @@
-using System.Threading.Channels;
-
 public sealed class ClipSession : IDisposable
 {
 	public RecordingSettings Settings { get; private set; }
 
-	private CancellationTokenSource _cts;
-
-	private Task _captureTask;
-	private Task _encodeTask;
-
-	private Channel<VideoFrame> _frameChannel;
-
-	private IVideoCapture _capture;
-	private IVideoEncoder _encoder;
+	private CancellationTokenSource? _cts;
+	private ICaptureSource? _captureSource;
+	private CpuReadbackHardwareEncoder? _encoder;
+	private CaptureManager? _captureManager;
 
 	public event Action<string>? StatusChanged;
 
 	public ClipSession(RecordingSettings settings)
 	{
 		Settings = settings;
-
-		_frameChannel = Channel.CreateBounded<VideoFrame>(500);
 	}
 
-	public Task StartAsync()
+	public async Task StartAsync()
 	{
+		if (_captureManager != null)
+		{
+			return;
+		}
+
 		_cts = new CancellationTokenSource();
+		_captureSource = CaptureSourceFactory.Create(Settings);
+		_encoder = new CpuReadbackHardwareEncoder();
+		_captureManager = new CaptureManager(_captureSource, _encoder);
 
-		_capture = CaptureFactory.Create(Settings);
-		_encoder = new FfmpegEncoder(Settings);
-
-		_captureTask = Task.Run(CaptureLoop);
-		_encodeTask = Task.Run(EncodeLoop);
+		await _captureManager.StartAsync(Settings, _cts.Token);
 
 		StatusChanged?.Invoke("running");
-
-		return Task.CompletedTask;
 	}
 
 	public async Task StopAsync()
 	{
-		_cts.Cancel();
-		_frameChannel.Writer.TryComplete();
+		_cts?.Cancel();
 
-		await Task.WhenAll(_captureTask, _encodeTask);
+		if (_captureManager != null)
+		{
+			await _captureManager.StopAsync();
+			_captureManager.Dispose();
+			_captureManager = null;
+		}
+		else
+		{
+			_captureSource?.Dispose();
+			_encoder?.Dispose();
+		}
 
-		_capture.Dispose();
-		_encoder.Dispose();
+		_captureSource = null;
+		_encoder = null;
+		_cts?.Dispose();
+		_cts = null;
 
 		StatusChanged?.Invoke("stopped");
 	}
 
-	private async Task CaptureLoop()
-	{
-		var fps = Math.Max(1, Settings.Fps);
-		var frameDuration = TimeSpan.FromSeconds(1.0 / fps);
-		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-		var nextFrameTime = stopwatch.Elapsed;
-		var token = _cts.Token;
-
-		try
-		{
-			while (!token.IsCancellationRequested)
-			{
-				var now = stopwatch.Elapsed;
-				if (now < nextFrameTime)
-				{
-					var delay = nextFrameTime - now;
-					if (delay > TimeSpan.Zero)
-					{
-						await Task.Delay(delay, token);
-					}
-				}
-
-				var frame = _capture.CaptureFrame();
-				await _frameChannel.Writer.WriteAsync(frame, token);
-
-				nextFrameTime += frameDuration;
-				var drift = stopwatch.Elapsed - nextFrameTime;
-				if (drift > frameDuration)
-				{
-					nextFrameTime = stopwatch.Elapsed + frameDuration;
-				}
-			}
-		}
-		catch (TaskCanceledException) when (token.IsCancellationRequested)
-		{
-			// expected on shutdown
-		}
-	}
-
-	private async Task EncodeLoop()
-	{
-		try
-		{
-			await foreach (var frame in _frameChannel.Reader.ReadAllAsync(_cts.Token))
-			{
-				_encoder.PushFrame(frame);
-			}
-		}
-		catch (OperationCanceledException) when (_cts.IsCancellationRequested)
-		{
-			// expected on shutdown
-		}
-	}
-
 	public Task SaveClipAsync(string path)
 	{
+		if (_encoder == null)
+		{
+			return Task.CompletedTask;
+		}
+
 		return _encoder.FlushRecentAsync(
 			path,
 			TimeSpan.FromSeconds(Settings.ClipSeconds));
@@ -114,6 +69,6 @@ public sealed class ClipSession : IDisposable
 
 	public void Dispose()
 	{
-		_cts?.Cancel();
+		StopAsync().GetAwaiter().GetResult();
 	}
 }
