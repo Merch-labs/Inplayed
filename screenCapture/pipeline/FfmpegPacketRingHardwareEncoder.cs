@@ -16,8 +16,9 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private ID3D11Texture2D? _staging;
 	private int _stagingWidth;
 	private int _stagingHeight;
-	private int _outputWidth;
-	private int _outputHeight;
+	private int _inputWidth;
+	private int _inputHeight;
+	private bool _restartRequested;
 
 	private Process? _ffmpeg;
 	private Stream? _stdin;
@@ -41,11 +42,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			}
 
 			_settings = settings;
-			_outputWidth = settings.Width;
-			_outputHeight = settings.Height;
+			_inputWidth = Math.Max(1, settings.Width);
+			_inputHeight = Math.Max(1, settings.Height);
 			_device = D3D11Helper.CreateDevice();
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
-			StartFfmpegLocked(settings, _videoCodec);
+			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
 			_running = true;
 		}
 	}
@@ -65,6 +66,20 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				return;
 			}
 
+			if (_restartRequested || frame.Width != _inputWidth || frame.Height != _inputHeight)
+			{
+				var nextWidth = frame.Width;
+				var nextHeight = frame.Height;
+				if (_restartRequested)
+				{
+					nextWidth = _inputWidth;
+					nextHeight = _inputHeight;
+				}
+
+				RestartFfmpegLocked(nextWidth, nextHeight);
+				_restartRequested = false;
+			}
+
 			_device.Context.CopyResource(_staging, frame.Texture);
 			var dataBox = _device.Context.Map(_staging, 0, MapMode.Read, MapFlags.None);
 			try
@@ -77,11 +92,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				{
 					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
 					Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
-				}
-
-				if (width != _outputWidth || height != _outputHeight)
-				{
-					buffer = GdiScaler.ScaleBgra(buffer, width, height, _outputWidth, _outputHeight);
 				}
 
 				_stdin.Write(buffer, 0, buffer.Length);
@@ -101,8 +111,9 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	{
 		lock (_gate)
 		{
-			_outputWidth = Math.Max(1, width);
-			_outputHeight = Math.Max(1, height);
+			_inputWidth = Math.Max(1, width);
+			_inputHeight = Math.Max(1, height);
+			_restartRequested = true;
 		}
 	}
 
@@ -124,10 +135,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 	public void Stop()
 	{
-		Process? ffmpeg;
-		Task? stdoutTask;
-		Task? stderrTask;
-
 		lock (_gate)
 		{
 			if (!_running)
@@ -136,49 +143,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			}
 
 			_running = false;
-			try
-			{
-				_stdin?.Flush();
-			}
-			catch
-			{
-			}
-
-			try
-			{
-				_stdin?.Dispose();
-			}
-			catch
-			{
-			}
-
-			_stdin = null;
-			ffmpeg = _ffmpeg;
-			_ffmpeg = null;
-			stdoutTask = _stdoutTask;
-			_stdoutTask = null;
-			stderrTask = _stderrTask;
-			_stderrTask = null;
-		}
-
-		if (ffmpeg != null)
-		{
-			try
-			{
-				ffmpeg.WaitForExit(3000);
-			}
-			catch
-			{
-			}
-		}
-
-		try
-		{
-			stdoutTask?.Wait(1000);
-			stderrTask?.Wait(1000);
-		}
-		catch
-		{
+			StopFfmpegProcessLocked();
 		}
 	}
 
@@ -197,14 +162,14 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	private void StartFfmpegLocked(RecordingSettings settings, string codec)
+	private void StartFfmpegLocked(RecordingSettings settings, string codec, int width, int height)
 	{
 		var fps = Math.Max(1, settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
 		var ffmpegPath = ResolveFfmpegPath();
 		var codecArgs = BuildCodecArgs(codec, fps, bitrate);
 		var args =
-			$"-hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
+			$"-hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s {width}x{height} -r {fps} " +
 			$"-i pipe:0 -an {codecArgs} -f h264 pipe:1";
 
 		var psi = new ProcessStartInfo
@@ -235,6 +200,69 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			throw new InvalidOperationException(
 				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, or install ffmpeg on PATH.");
 		}
+	}
+
+	private void RestartFfmpegLocked(int width, int height)
+	{
+		StopFfmpegProcessLocked();
+		if (_settings == null)
+		{
+			return;
+		}
+
+		_inputWidth = Math.Max(1, width);
+		_inputHeight = Math.Max(1, height);
+		StartFfmpegLocked(_settings, _videoCodec, _inputWidth, _inputHeight);
+	}
+
+	private void StopFfmpegProcessLocked()
+	{
+		var ffmpeg = _ffmpeg;
+		var stdoutTask = _stdoutTask;
+		var stderrTask = _stderrTask;
+		_ffmpeg = null;
+		_stdoutTask = null;
+		_stderrTask = null;
+
+		try
+		{
+			_stdin?.Flush();
+		}
+		catch
+		{
+		}
+
+		try
+		{
+			_stdin?.Dispose();
+		}
+		catch
+		{
+		}
+
+		_stdin = null;
+
+		if (ffmpeg != null)
+		{
+			try
+			{
+				ffmpeg.WaitForExit(2000);
+			}
+			catch
+			{
+			}
+		}
+
+		try
+		{
+			stdoutTask?.Wait(500);
+			stderrTask?.Wait(500);
+		}
+		catch
+		{
+		}
+
+		ffmpeg?.Dispose();
 	}
 
 	private static string BuildCodecArgs(string codec, int fps, int bitrate)
