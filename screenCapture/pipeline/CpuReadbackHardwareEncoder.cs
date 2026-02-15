@@ -3,6 +3,8 @@ using Vortice.Direct3D11;
 
 public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 {
+	public string BackendName => $"CpuReadback:{_videoCodec}";
+
 	private readonly string _videoCodec;
 	private readonly object _gate = new();
 	private RecordingSettings? _settings;

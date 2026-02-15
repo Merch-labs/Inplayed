@@ -6,6 +6,8 @@ using Vortice.Direct3D11;
 
 public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 {
+	public string BackendName => $"FfmpegPacketRing:{_videoCodec}";
+
 	private readonly object _gate = new();
 	private readonly string _videoCodec;
 	private readonly H264AnnexBPacketizer _packetizer = new();

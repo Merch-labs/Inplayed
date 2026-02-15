@@ -1,5 +1,7 @@
 public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 {
+	public string BackendName => _active?.BackendName ?? "Adaptive:Uninitialized";
+
 	private readonly Func<IHardwareEncoder>[] _candidates;
 	private IHardwareEncoder? _active;
 
@@ -21,7 +23,7 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 				encoder = create();
 				encoder.Start(settings);
 				_active = encoder;
-				Console.WriteLine($"Encoder backend active: {encoder.GetType().Name}");
+				Console.WriteLine($"Encoder backend active: {encoder.BackendName}");
 				return;
 			}
 			catch (Exception ex)

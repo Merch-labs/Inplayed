@@ -28,6 +28,7 @@ public sealed class ClipSession : IDisposable
 
 		await _captureManager.StartAsync(Settings, _cts.Token);
 
+		StatusChanged?.Invoke($"encoder:{_encoder.BackendName}");
 		StatusChanged?.Invoke("running");
 	}
 
