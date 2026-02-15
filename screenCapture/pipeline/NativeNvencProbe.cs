@@ -76,4 +76,18 @@ internal static class NativeNvencProbe
 			return false;
 		}
 	}
+
+	public static bool TryLoadCuda(out IntPtr cudaHandle, out string message)
+	{
+		cudaHandle = IntPtr.Zero;
+		message = "unknown";
+		if (NativeLibrary.TryLoad("nvcuda.dll", out cudaHandle))
+		{
+			message = "loaded:nvcuda.dll";
+			return true;
+		}
+
+		message = "nvcuda.dll not found";
+		return false;
+	}
 }
