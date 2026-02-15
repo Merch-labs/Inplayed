@@ -63,7 +63,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC max supported version query failed: 0x{rc:X8}");
 		}
 
-		_status = $"runtime_bound_cuda_loaded_maxver=0x{_maxSupportedVersion:X8}_but_not_implemented";
+		_status = $"runtime_bound_cuda_loaded_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -89,7 +89,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return _status;
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})";
 	}
 
 	public void Stop()
@@ -127,5 +127,12 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_createInstance = null;
 		_getMaxSupportedVersion = null;
 		_maxSupportedVersion = 0;
+	}
+
+	private static string FormatVersionWords(uint version)
+	{
+		var hi = (version >> 16) & 0xFFFF;
+		var lo = version & 0xFFFF;
+		return $"{hi}.{lo}";
 	}
 }
