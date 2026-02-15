@@ -14,6 +14,12 @@ internal static class NvencNative
 	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
 	public delegate int NvEncodeApiGetMaxSupportedVersionDelegate(out uint version);
 
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	public delegate int CuInitDelegate(uint flags);
+
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+	public delegate int CuDriverGetVersionDelegate(out int driverVersion);
+
 	public static string ResultToString(int code)
 	{
 		var value = unchecked((uint)code);
@@ -26,5 +32,10 @@ internal static class NvencNative
 			NV_ENC_ERR_OUT_OF_MEMORY => "NV_ENC_ERR_OUT_OF_MEMORY",
 			_ => $"NVENC_ERR_0x{value:X8}"
 		};
+	}
+
+	public static string CudaResultToString(int code)
+	{
+		return code == 0 ? "CUDA_SUCCESS" : $"CUDA_ERR_{code}";
 	}
 }

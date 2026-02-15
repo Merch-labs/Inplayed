@@ -8,7 +8,10 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private IntPtr _cudaLib;
 	private NvencNative.NvEncodeApiCreateInstanceDelegate? _createInstance;
 	private NvencNative.NvEncodeApiGetMaxSupportedVersionDelegate? _getMaxSupportedVersion;
+	private NvencNative.CuInitDelegate? _cuInit;
+	private NvencNative.CuDriverGetVersionDelegate? _cuDriverGetVersion;
 	private uint _maxSupportedVersion;
+	private int _cudaDriverVersion;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -49,6 +52,42 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"CUDA runtime probe failed: {message}");
 		}
 
+		if (!NativeNvencProbe.TryBindCudaInit(_cudaLib, out _cuInit, out message))
+		{
+			_status = $"cuda_bind_failed:{message}";
+			throw new NotSupportedException($"CUDA bind failed: {message}");
+		}
+
+		if (!NativeNvencProbe.TryBindCudaDriverGetVersion(_cudaLib, out _cuDriverGetVersion, out message))
+		{
+			_status = $"cuda_bind_failed:{message}";
+			throw new NotSupportedException($"CUDA bind failed: {message}");
+		}
+
+		var cuInit = _cuInit;
+		var cuGetVersion = _cuDriverGetVersion;
+		if (cuInit == null || cuGetVersion == null)
+		{
+			_status = "cuda_delegate_null";
+			throw new NotSupportedException("CUDA delegates are null.");
+		}
+
+		var cuInitRc = cuInit(0);
+		if (cuInitRc != 0)
+		{
+			var cudaRc = NvencNative.CudaResultToString(cuInitRc);
+			_status = $"cuda_init_failed:{cudaRc}";
+			throw new NotSupportedException($"CUDA initialization failed: {cudaRc}");
+		}
+
+		var cuVersionRc = cuGetVersion(out _cudaDriverVersion);
+		if (cuVersionRc != 0)
+		{
+			var cudaRc = NvencNative.CudaResultToString(cuVersionRc);
+			_status = $"cuda_version_failed:{cudaRc}";
+			throw new NotSupportedException($"CUDA driver version query failed: {cudaRc}");
+		}
+
 		var getMaxVersion = _getMaxSupportedVersion;
 		if (getMaxVersion == null)
 		{
@@ -64,7 +103,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC max supported version query failed: {rcName}");
 		}
 
-		_status = $"runtime_bound_cuda_loaded_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_but_not_implemented";
+		_status = $"runtime_bound_cuda_ok(cu={FormatCudaDriverVersion(_cudaDriverVersion)})_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -90,7 +129,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)}";
 	}
 
 	public void Stop()
@@ -127,7 +166,10 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 		_createInstance = null;
 		_getMaxSupportedVersion = null;
+		_cuInit = null;
+		_cuDriverGetVersion = null;
 		_maxSupportedVersion = 0;
+		_cudaDriverVersion = 0;
 	}
 
 	private static string FormatVersionWords(uint version)
@@ -135,5 +177,17 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		var hi = (version >> 16) & 0xFFFF;
 		var lo = version & 0xFFFF;
 		return $"{hi}.{lo}";
+	}
+
+	private static string FormatCudaDriverVersion(int version)
+	{
+		if (version <= 0)
+		{
+			return "unknown";
+		}
+
+		var major = version / 1000;
+		var minor = (version % 1000) / 10;
+		return $"{major}.{minor}";
 	}
 }

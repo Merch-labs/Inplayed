@@ -122,4 +122,68 @@ internal static class NativeNvencProbe
 		message = "nvcuda.dll not found";
 		return false;
 	}
+
+	public static bool TryBindCudaInit(
+		IntPtr cudaHandle,
+		out NvencNative.CuInitDelegate? cuInit,
+		out string message)
+	{
+		cuInit = null;
+		message = "unknown";
+		if (cudaHandle == IntPtr.Zero)
+		{
+			message = "cuda handle is zero";
+			return false;
+		}
+
+		if (!NativeLibrary.TryGetExport(cudaHandle, "cuInit", out var proc))
+		{
+			message = "missing cuInit export";
+			return false;
+		}
+
+		try
+		{
+			cuInit = Marshal.GetDelegateForFunctionPointer<NvencNative.CuInitDelegate>(proc);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
+
+	public static bool TryBindCudaDriverGetVersion(
+		IntPtr cudaHandle,
+		out NvencNative.CuDriverGetVersionDelegate? cuDriverGetVersion,
+		out string message)
+	{
+		cuDriverGetVersion = null;
+		message = "unknown";
+		if (cudaHandle == IntPtr.Zero)
+		{
+			message = "cuda handle is zero";
+			return false;
+		}
+
+		if (!NativeLibrary.TryGetExport(cudaHandle, "cuDriverGetVersion", out var proc))
+		{
+			message = "missing cuDriverGetVersion export";
+			return false;
+		}
+
+		try
+		{
+			cuDriverGetVersion = Marshal.GetDelegateForFunctionPointer<NvencNative.CuDriverGetVersionDelegate>(proc);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }
