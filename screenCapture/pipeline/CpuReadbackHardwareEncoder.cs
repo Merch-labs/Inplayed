@@ -83,7 +83,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 	{
 	}
 
-	public Task FlushRecentAsync(string path, TimeSpan clipLength)
+	public Task FlushRecentAsync(string path, TimeSpan clipLength, CancellationToken token = default)
 	{
 		lock (_gate)
 		{

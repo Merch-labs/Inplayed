@@ -4,7 +4,7 @@ public sealed class ClipSession : IDisposable
 
 	private CancellationTokenSource? _cts;
 	private ICaptureSource? _captureSource;
-	private CpuReadbackHardwareEncoder? _encoder;
+	private IHardwareEncoder? _encoder;
 	private CaptureManager? _captureManager;
 
 	public event Action<string>? StatusChanged;
@@ -23,7 +23,7 @@ public sealed class ClipSession : IDisposable
 
 		_cts = new CancellationTokenSource();
 		_captureSource = CaptureSourceFactory.Create(Settings);
-		_encoder = new CpuReadbackHardwareEncoder();
+		_encoder = HardwareEncoderFactory.Create(Settings);
 		_captureManager = new CaptureManager(_captureSource, _encoder);
 
 		await _captureManager.StartAsync(Settings, _cts.Token);
@@ -64,7 +64,8 @@ public sealed class ClipSession : IDisposable
 
 		return _encoder.FlushRecentAsync(
 			path,
-			TimeSpan.FromSeconds(Settings.ClipSeconds));
+			TimeSpan.FromSeconds(Settings.ClipSeconds),
+			CancellationToken.None);
 	}
 
 	public void Dispose()
