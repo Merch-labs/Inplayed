@@ -59,8 +59,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		var rc = getMaxVersion(out _maxSupportedVersion);
 		if (rc != 0)
 		{
-			_status = $"max_version_query_failed:0x{rc:X8}";
-			throw new NotSupportedException($"NVENC max supported version query failed: 0x{rc:X8}");
+			var rcName = NvencNative.ResultToString(rc);
+			_status = $"max_version_query_failed:{rcName}";
+			throw new NotSupportedException($"NVENC max supported version query failed: {rcName}");
 		}
 
 		_status = $"runtime_bound_cuda_loaded_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_but_not_implemented";
