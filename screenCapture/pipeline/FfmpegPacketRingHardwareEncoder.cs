@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Buffers;
 using System.Threading;
+using System.Threading.Channels;
 using Vortice.Direct3D11;
 
 public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
@@ -26,6 +27,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 	private Process? _ffmpeg;
 	private Stream? _stdin;
+	private Channel<PendingInput>? _inputQueue;
+	private Task? _stdinTask;
 	private Task? _stdoutTask;
 	private Task? _stderrTask;
 	private EncodedPacketRingBuffer? _ringBuffer;
@@ -35,6 +38,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private long _packetBytes;
 	private long _packetCount;
 	private long _restartCount;
+	private long _queueDrops;
+	private long _queuedBuffers;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -107,12 +112,18 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 						Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
 					}
 
-					_stdin.Write(buffer, 0, totalBytes);
-					Interlocked.Add(ref _inputBytes, totalBytes);
+					if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes)))
+					{
+						Interlocked.Increment(ref _queueDrops);
+						ArrayPool<byte>.Shared.Return(buffer);
+						return;
+					}
+
+					Interlocked.Increment(ref _queuedBuffers);
 				}
 				finally
 				{
-					ArrayPool<byte>.Shared.Return(buffer);
+					// buffer returned by input writer or on queue drop path
 				}
 			}
 			catch (IOException)
@@ -157,7 +168,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)}";
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)}";
 		}
 	}
 
@@ -220,6 +231,13 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			}
 
 			_stdin = _ffmpeg.StandardInput.BaseStream;
+			_inputQueue = Channel.CreateBounded<PendingInput>(new BoundedChannelOptions(8)
+			{
+				SingleReader = true,
+				SingleWriter = false,
+				FullMode = BoundedChannelFullMode.DropWrite
+			});
+			_stdinTask = Task.Run(WriteInputLoop);
 			_stdoutTask = Task.Run(ReadEncodedStdoutLoop);
 			_stderrTask = Task.Run(() => _ffmpeg.StandardError.ReadToEnd());
 		}
@@ -247,11 +265,24 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private void StopFfmpegProcessLocked()
 	{
 		var ffmpeg = _ffmpeg;
+		var inputQueue = _inputQueue;
+		var stdinTask = _stdinTask;
 		var stdoutTask = _stdoutTask;
 		var stderrTask = _stderrTask;
 		_ffmpeg = null;
+		_inputQueue = null;
+		_stdinTask = null;
 		_stdoutTask = null;
 		_stderrTask = null;
+		inputQueue?.Writer.TryComplete();
+
+		try
+		{
+			stdinTask?.Wait(750);
+		}
+		catch
+		{
+		}
 
 		try
 		{
@@ -307,6 +338,36 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 
 		return $"-c:v {codec} -g {fps * 2} -bf 0 -b:v {bitrate}";
+	}
+
+	private async Task WriteInputLoop()
+	{
+		var queue = _inputQueue;
+		var stdin = _stdin;
+		if (queue == null || stdin == null)
+		{
+			return;
+		}
+
+		try
+		{
+			await foreach (var input in queue.Reader.ReadAllAsync())
+			{
+				try
+				{
+					await stdin.WriteAsync(input.Buffer, 0, input.Count);
+					Interlocked.Add(ref _inputBytes, input.Count);
+				}
+				finally
+				{
+					Interlocked.Decrement(ref _queuedBuffers);
+					ArrayPool<byte>.Shared.Return(input.Buffer);
+				}
+			}
+		}
+		catch
+		{
+		}
 	}
 
 	private async Task ReadEncodedStdoutLoop()
@@ -394,4 +455,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 		return "ffmpeg";
 	}
+
+	private readonly record struct PendingInput(byte[] Buffer, int Count);
 }
