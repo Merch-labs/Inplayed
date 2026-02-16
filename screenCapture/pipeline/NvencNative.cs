@@ -131,6 +131,10 @@ internal static class NvencNative
 	public const uint NV_ENC_INITIALIZE_PARAMS_VER = 1;
 	public const uint NV_ENC_CONFIG_VER = 1;
 	public const uint NV_ENC_CREATE_BITSTREAM_BUFFER_VER = 1;
+	public const uint NV_ENC_REGISTER_RESOURCE_VER = 1;
+	public const uint NV_ENC_MAP_INPUT_RESOURCE_VER = 1;
+	public const uint NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX = 0;
+	public const uint NV_ENC_BUFFER_FORMAT_ARGB = 0;
 
 	[StructLayout(LayoutKind.Sequential)]
 	public struct NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS
@@ -191,5 +195,30 @@ internal static class NvencNative
 		public uint reserved;
 		public IntPtr bitstreamBuffer;
 		public IntPtr bitstreamBufferPtr;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_REGISTER_RESOURCE
+	{
+		public uint version;
+		public uint resourceType;
+		public uint width;
+		public uint height;
+		public uint pitch;
+		public uint subResourceIndex;
+		public IntPtr resourceToRegister;
+		public IntPtr registeredResource;
+		public uint bufferFormat;
+		public uint reserved;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_MAP_INPUT_RESOURCE
+	{
+		public uint version;
+		public IntPtr registeredResource;
+		public IntPtr mappedResource;
+		public uint mappedBufferFmt;
+		public uint reserved;
 	}
 }
