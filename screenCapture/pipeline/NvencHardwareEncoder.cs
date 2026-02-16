@@ -860,7 +860,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 					_encodeFrameIndex++;
 					_bitstreamPending[_bitstreamWriteIndex] = true;
 					_bitstreamTimestamps[_bitstreamWriteIndex] = frame.Timestamp;
-					TryDrainPendingBitstreams();
+						TryDrainPendingBitstreams(doNotWait: true);
 					_bitstreamWriteIndex = (_bitstreamWriteIndex + 1) % _bitstreamBuffers.Length;
 				}
 			}
@@ -905,7 +905,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		if (_running)
 		{
-			DrainPendingBitstreams(maxPasses: 8);
+			DrainPendingBitstreams(maxPasses: 8, doNotWait: true);
 		}
 
 		if (_ringBuffer == null)
@@ -931,7 +931,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 
 		_running = false;
-		DrainPendingBitstreams(maxPasses: 16);
+		DrainPendingBitstreams(maxPasses: 16, doNotWait: false);
 		DestroyBitstreamBuffers();
 		UnregisterAllResources();
 		DestroyEncoderSession();
@@ -1276,7 +1276,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_encoderSession = IntPtr.Zero;
 	}
 
-	private void TryDrainPendingBitstreams()
+	private void TryDrainPendingBitstreams(bool doNotWait)
 	{
 		for (var i = 0; i < _bitstreamPending.Length; i++)
 		{
@@ -1285,7 +1285,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 				continue;
 			}
 
-			if (TryDrainBitstream(_bitstreamBuffers[i], _bitstreamTimestamps[i]))
+			if (TryDrainBitstream(_bitstreamBuffers[i], _bitstreamTimestamps[i], doNotWait))
 			{
 				_bitstreamPending[i] = false;
 				_bitstreamTimestamps[i] = 0;
@@ -1293,7 +1293,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	private void DrainPendingBitstreams(int maxPasses)
+	private void DrainPendingBitstreams(int maxPasses, bool doNotWait)
 	{
 		if (_bitstreamPending.Length == 0 || maxPasses <= 0)
 		{
@@ -1302,7 +1302,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 		for (var pass = 0; pass < maxPasses; pass++)
 		{
-			TryDrainPendingBitstreams();
+			TryDrainPendingBitstreams(doNotWait);
 			if (CountPendingBitstreams() == 0)
 			{
 				return;
@@ -1331,7 +1331,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		return count;
 	}
 
-	private bool TryDrainBitstream(IntPtr bitstreamBuffer, long frameTimestamp)
+	private bool TryDrainBitstream(IntPtr bitstreamBuffer, long frameTimestamp, bool doNotWait)
 	{
 		if (_encoderSession == IntPtr.Zero || bitstreamBuffer == IntPtr.Zero)
 		{
@@ -1348,7 +1348,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		var lockParams = new NvencNative.NV_ENC_LOCK_BITSTREAM
 		{
 			version = NvencNative.EncodeStructVersion<NvencNative.NV_ENC_LOCK_BITSTREAM>(NvencNative.NV_ENC_LOCK_BITSTREAM_VER),
-			doNotWait = 1,
+			doNotWait = doNotWait ? 1u : 0u,
 			outputBitstream = bitstreamBuffer
 		};
 		if (_lockParamsPtr == IntPtr.Zero)
