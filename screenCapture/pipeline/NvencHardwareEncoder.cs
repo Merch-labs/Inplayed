@@ -213,6 +213,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private bool _running;
 	private long[] _bitstreamTimestamps = Array.Empty<long>();
 	private bool[] _bitstreamPending = Array.Empty<bool>();
+	private IntPtr _mapParamsPtr;
+	private IntPtr _picParamsPtr;
+	private IntPtr _lockParamsPtr;
 	private int _getEncodeGuidCountRc;
 	private uint _encodeGuidCount;
 	private int _getEncodeGuidsRc;
@@ -760,6 +763,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 
 		InitializeBitstreamBufferPool();
+		EnsureReusableStructBuffers();
 		_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
 		_running = true;
 
@@ -791,18 +795,22 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			version = NvencNative.EncodeStructVersion<NvencNative.NV_ENC_MAP_INPUT_RESOURCE>(NvencNative.NV_ENC_MAP_INPUT_RESOURCE_VER),
 			registeredResource = registeredResource
 		};
-		var mapPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_MAP_INPUT_RESOURCE>());
+		if (_mapParamsPtr == IntPtr.Zero || _picParamsPtr == IntPtr.Zero)
+		{
+			_mappedResourceFailures++;
+			return;
+		}
 		try
 		{
-			Marshal.StructureToPtr(mapParams, mapPtr, false);
-			var mapRc = mapInput(_encoderSession, mapPtr);
+			Marshal.StructureToPtr(mapParams, _mapParamsPtr, false);
+			var mapRc = mapInput(_encoderSession, _mapParamsPtr);
 			if (mapRc != 0)
 			{
 				_mappedResourceFailures++;
 				return;
 			}
 
-			var mapped = Marshal.PtrToStructure<NvencNative.NV_ENC_MAP_INPUT_RESOURCE>(mapPtr);
+			var mapped = Marshal.PtrToStructure<NvencNative.NV_ENC_MAP_INPUT_RESOURCE>(_mapParamsPtr);
 			if (mapped.mappedResource == IntPtr.Zero)
 			{
 				_mappedResourceFailures++;
@@ -830,28 +838,20 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 					bufferFmt = NvencNative.NV_ENC_BUFFER_FORMAT_ARGB,
 					pictureStruct = NvencNative.NV_ENC_PIC_STRUCT_FRAME
 				};
-				var picPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_PIC_PARAMS>());
-				try
+				Marshal.StructureToPtr(picParams, _picParamsPtr, false);
+				_lastEncodePictureRc = encodePicture(_encoderSession, _picParamsPtr);
+				if (_lastEncodePictureRc != 0)
 				{
-					Marshal.StructureToPtr(picParams, picPtr, false);
-					_lastEncodePictureRc = encodePicture(_encoderSession, picPtr);
-					if (_lastEncodePictureRc != 0)
-					{
-						_encodeSubmitFailures++;
-					}
-					else
-					{
-						_submittedEncodeCount++;
-						_encodeFrameIndex++;
-						_bitstreamPending[_bitstreamWriteIndex] = true;
-						_bitstreamTimestamps[_bitstreamWriteIndex] = frame.Timestamp;
-						TryDrainPendingBitstreams();
-						_bitstreamWriteIndex = (_bitstreamWriteIndex + 1) % _bitstreamBuffers.Length;
-					}
+					_encodeSubmitFailures++;
 				}
-				finally
+				else
 				{
-					Marshal.FreeHGlobal(picPtr);
+					_submittedEncodeCount++;
+					_encodeFrameIndex++;
+					_bitstreamPending[_bitstreamWriteIndex] = true;
+					_bitstreamTimestamps[_bitstreamWriteIndex] = frame.Timestamp;
+					TryDrainPendingBitstreams();
+					_bitstreamWriteIndex = (_bitstreamWriteIndex + 1) % _bitstreamBuffers.Length;
 				}
 			}
 
@@ -863,7 +863,6 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 		finally
 		{
-			Marshal.FreeHGlobal(mapPtr);
 		}
 	}
 
@@ -902,6 +901,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		DestroyBitstreamBuffers();
 		UnregisterAllResources();
 		DestroyEncoderSession();
+		ReleaseReusableStructBuffers();
 		_status = "stopped";
 	}
 
@@ -1025,6 +1025,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_ringBuffer = null;
 		_bitstreamTimestamps = Array.Empty<long>();
 		_bitstreamPending = Array.Empty<bool>();
+		_mapParamsPtr = IntPtr.Zero;
+		_picParamsPtr = IntPtr.Zero;
+		_lockParamsPtr = IntPtr.Zero;
 		_running = false;
 		_bootstrapDevice?.Dispose();
 		_bootstrapDevice = null;
@@ -1053,6 +1056,45 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		var v = Math.Max(2, value);
 		return (uint)(v & ~1);
+	}
+
+	private void EnsureReusableStructBuffers()
+	{
+		if (_mapParamsPtr == IntPtr.Zero)
+		{
+			_mapParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_MAP_INPUT_RESOURCE>());
+		}
+
+		if (_picParamsPtr == IntPtr.Zero)
+		{
+			_picParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_PIC_PARAMS>());
+		}
+
+		if (_lockParamsPtr == IntPtr.Zero)
+		{
+			_lockParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_LOCK_BITSTREAM>());
+		}
+	}
+
+	private void ReleaseReusableStructBuffers()
+	{
+		if (_mapParamsPtr != IntPtr.Zero)
+		{
+			Marshal.FreeHGlobal(_mapParamsPtr);
+			_mapParamsPtr = IntPtr.Zero;
+		}
+
+		if (_picParamsPtr != IntPtr.Zero)
+		{
+			Marshal.FreeHGlobal(_picParamsPtr);
+			_picParamsPtr = IntPtr.Zero;
+		}
+
+		if (_lockParamsPtr != IntPtr.Zero)
+		{
+			Marshal.FreeHGlobal(_lockParamsPtr);
+			_lockParamsPtr = IntPtr.Zero;
+		}
 	}
 
 	private void InitializeBitstreamBufferPool()
@@ -1201,12 +1243,16 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			doNotWait = 1,
 			outputBitstream = bitstreamBuffer
 		};
-		var lockPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_LOCK_BITSTREAM>());
+		if (_lockParamsPtr == IntPtr.Zero)
+		{
+			_lockBitstreamFailures++;
+			return false;
+		}
 		var lockSucceeded = false;
 		try
 		{
-			Marshal.StructureToPtr(lockParams, lockPtr, false);
-			var lockRc = lockBitstream(_encoderSession, lockPtr);
+			Marshal.StructureToPtr(lockParams, _lockParamsPtr, false);
+			var lockRc = lockBitstream(_encoderSession, _lockParamsPtr);
 			if (lockRc != 0)
 			{
 				_lockBitstreamBusyCount++;
@@ -1214,7 +1260,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			}
 			lockSucceeded = true;
 
-			var locked = Marshal.PtrToStructure<NvencNative.NV_ENC_LOCK_BITSTREAM>(lockPtr);
+			var locked = Marshal.PtrToStructure<NvencNative.NV_ENC_LOCK_BITSTREAM>(_lockParamsPtr);
 			if (locked.bitstreamBufferPtr == IntPtr.Zero || locked.bitstreamSizeInBytes == 0)
 			{
 				return false;
@@ -1222,10 +1268,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 			var size = (int)locked.bitstreamSizeInBytes;
 			var data = GC.AllocateUninitializedArray<byte>(size);
-			for (var i = 0; i < size; i++)
-			{
-				data[i] = Marshal.ReadByte(locked.bitstreamBufferPtr, i);
-			}
+			Marshal.Copy(locked.bitstreamBufferPtr, data, 0, size);
 
 			var isKeyFrame = locked.pictureType == 1;
 			var ts = frameTimestamp > 0 ? frameTimestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -1236,7 +1279,6 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 		finally
 		{
-			Marshal.FreeHGlobal(lockPtr);
 			if (lockSucceeded)
 			{
 				var unlockRc = unlockBitstream(_encoderSession, bitstreamBuffer);
