@@ -311,15 +311,19 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC get-encode-guids bind failed: {openPtrMsg}");
 		}
 
-		// Optional at this stage; used for deeper capability diagnostics.
 		_ = NvencApiBootstrap.TryBindGetEncodeProfileGuidsDelegate(
 			_getEncodeProfileGuidsPtr,
 			out _getEncodeProfileGuids,
 			out _);
-		_ = NvencApiBootstrap.TryBindInitializeEncoderDelegate(
+
+		if (!NvencApiBootstrap.TryBindInitializeEncoderDelegate(
 			_initializeEncoderPtr,
 			out _initializeEncoder,
-			out _);
+			out openPtrMsg))
+		{
+			_status = $"initialize_encoder_bind_failed:{openPtrMsg}";
+			throw new NotSupportedException($"NVENC initialize-encoder bind failed: {openPtrMsg}");
+		}
 
 		var openSession = _openSession;
 		if (openSession == null)
@@ -443,6 +447,12 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		{
 			_selectedCodecGuid = Guid.Empty;
 			_selectedCodecName = "none";
+		}
+
+		if (_selectedCodecGuid == Guid.Empty)
+		{
+			_status = "no_supported_codec_guid";
+			throw new NotSupportedException("NVENC reported no supported H.264/HEVC codec GUID.");
 		}
 
 		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_initBound={(_initializeEncoder != null ? 1 : 0)}_but_not_implemented";
