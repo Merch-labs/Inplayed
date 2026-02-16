@@ -6,7 +6,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		if (!GpuCapabilityProbe.IsNvidiaAdapterPresent())
 		{
-			return new NvencReadiness(false, "nvidia_adapter_not_detected", 0, 0, 0, false, false, false);
+			return new NvencReadiness(false, "nvidia_adapter_not_detected", 0, 0, 0, false, false, false, false);
 		}
 
 		IntPtr nvenc = IntPtr.Zero;
@@ -16,93 +16,107 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		{
 			if (!NativeNvencProbe.TryLoad(out nvenc, out var msg))
 			{
-				return new NvencReadiness(false, $"probe_failed:{msg}", 0, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"probe_failed:{msg}", 0, 0, 0, false, false, false, false);
 			}
 
 			if (!NativeNvencProbe.TryBindCreateInstance(nvenc, out var createInstance, out msg) ||
 				createInstance == null)
 			{
-				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0, false, false, false, false);
 			}
 
 			if (!NativeNvencProbe.TryBindGetMaxSupportedVersion(nvenc, out var getMaxVersion, out msg) ||
 				getMaxVersion == null)
 			{
-				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"bind_failed:{msg}", 0, 0, 0, false, false, false, false);
 			}
 
 			var maxRc = getMaxVersion(out var maxVersion);
 			if (maxRc != 0)
 			{
-				return new NvencReadiness(false, $"max_version_query_failed:{NvencNative.ResultToString(maxRc)}", 0, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"max_version_query_failed:{NvencNative.ResultToString(maxRc)}", 0, 0, 0, false, false, false, false);
 			}
 
 			if (!NvencNative.IsApiCompatible(maxVersion, NvencNative.NVENCAPI_VERSION))
 			{
-				return new NvencReadiness(false, $"api_version_too_old:max=0x{maxVersion:X8};required=0x{NvencNative.NVENCAPI_VERSION:X8}", maxVersion, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"api_version_too_old:max=0x{maxVersion:X8};required=0x{NvencNative.NVENCAPI_VERSION:X8}", maxVersion, 0, 0, false, false, false, false);
 			}
 
 			fnList = NvencFunctionList.Allocate(maxVersion, out _);
 			var ciRc = createInstance(fnList);
 			if (ciRc != 0)
 			{
-				return new NvencReadiness(false, $"create_instance_failed:{NvencNative.ResultToString(ciRc)}", maxVersion, 0, 0, false, false, false);
+				return new NvencReadiness(false, $"create_instance_failed:{NvencNative.ResultToString(ciRc)}", maxVersion, 0, 0, false, false, false, false);
 			}
 
 			var fnPtrCount = NvencFunctionList.CountNonZeroPointerSlots(fnList, 96);
 			if (fnPtrCount == 0)
 			{
-				return new NvencReadiness(false, "create_instance_empty_function_list", maxVersion, 0, 0, false, false, false);
+				return new NvencReadiness(false, "create_instance_empty_function_list", maxVersion, 0, 0, false, false, false, false);
 			}
 
 			var requiredSlots = NvencFunctionListInspector.ReadRequiredSlots(fnList);
 			if (!requiredSlots.AllPresent)
 			{
-				return new NvencReadiness(false, "required_function_slots_missing", maxVersion, 0, fnPtrCount, false, false, false);
+				return new NvencReadiness(false, "required_function_slots_missing", maxVersion, 0, fnPtrCount, false, false, false, false);
 			}
 
 			var openSessionPtr = NvencFunctionListInspector.ReadPointerAtSlot(fnList, 0);
 			if (!NvencApiBootstrap.TryBindOpenSessionDelegate(openSessionPtr, out var openSessionDelegate, out msg) ||
 				openSessionDelegate == null)
 			{
-				return new NvencReadiness(false, $"open_session_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, false, false);
+				return new NvencReadiness(false, $"open_session_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, false, false, false);
 			}
 
 			var initializePtr = NvencFunctionListInspector.ReadPointerAtSlot(fnList, 12);
 			if (!NvencApiBootstrap.TryBindInitializeEncoderDelegate(initializePtr, out var initializeDelegate, out msg) ||
 				initializeDelegate == null)
 			{
-				return new NvencReadiness(false, $"initialize_encoder_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, false);
+				return new NvencReadiness(false, $"initialize_encoder_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, false, false);
+			}
+
+			var presetCountPtr = NvencFunctionListInspector.ReadPointerAtSlot(fnList, 8);
+			var presetGuidsPtr = NvencFunctionListInspector.ReadPointerAtSlot(fnList, 9);
+			if (!NvencApiBootstrap.TryBindGetEncodePresetCountDelegate(presetCountPtr, out var presetCountDelegate, out msg) ||
+				presetCountDelegate == null)
+			{
+				return new NvencReadiness(false, $"preset_count_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true, false);
+			}
+
+			if (!NvencApiBootstrap.TryBindGetEncodePresetGuidsDelegate(presetGuidsPtr, out var presetGuidsDelegate, out msg) ||
+				presetGuidsDelegate == null)
+			{
+				return new NvencReadiness(false, $"preset_guids_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true, false);
 			}
 
 			if (!NativeNvencProbe.TryLoadCuda(out cuda, out msg))
 			{
-				return new NvencReadiness(false, $"cuda_missing:{msg}", maxVersion, 0, fnPtrCount, true, true, true);
+				return new NvencReadiness(false, $"cuda_missing:{msg}", maxVersion, 0, fnPtrCount, true, true, true, true);
 			}
 
 			if (!NativeNvencProbe.TryBindCudaInit(cuda, out var cuInit, out msg) || cuInit == null)
 			{
-				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true);
+				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true, true);
 			}
 
 			if (!NativeNvencProbe.TryBindCudaDriverGetVersion(cuda, out var cuGetVersion, out msg) || cuGetVersion == null)
 			{
-				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true);
+				return new NvencReadiness(false, $"cuda_bind_failed:{msg}", maxVersion, 0, fnPtrCount, true, true, true, true);
 			}
 
 			var cuInitRc = cuInit(0);
 			if (cuInitRc != 0)
 			{
-				return new NvencReadiness(false, $"cuda_init_failed:{NvencNative.CudaResultToString(cuInitRc)}", maxVersion, 0, fnPtrCount, true, true, true);
+				return new NvencReadiness(false, $"cuda_init_failed:{NvencNative.CudaResultToString(cuInitRc)}", maxVersion, 0, fnPtrCount, true, true, true, true);
 			}
 
 			var cuVersionRc = cuGetVersion(out var cudaVersion);
 			if (cuVersionRc != 0)
 			{
-				return new NvencReadiness(false, $"cuda_version_failed:{NvencNative.CudaResultToString(cuVersionRc)}", maxVersion, 0, fnPtrCount, true, true, true);
+				return new NvencReadiness(false, $"cuda_version_failed:{NvencNative.CudaResultToString(cuVersionRc)}", maxVersion, 0, fnPtrCount, true, true, true, true);
 			}
 
-			return new NvencReadiness(true, "ready", maxVersion, cudaVersion, fnPtrCount, true, true, true);
+			return new NvencReadiness(true, "ready", maxVersion, cudaVersion, fnPtrCount, true, true, true, true);
 		}
 		finally
 		{
@@ -332,14 +346,22 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			_getEncodeProfileGuidsPtr,
 			out _getEncodeProfileGuids,
 			out _);
-		_ = NvencApiBootstrap.TryBindGetEncodePresetCountDelegate(
+		if (!NvencApiBootstrap.TryBindGetEncodePresetCountDelegate(
 			_getEncodePresetCountPtr,
 			out _getEncodePresetCount,
-			out _);
-		_ = NvencApiBootstrap.TryBindGetEncodePresetGuidsDelegate(
+			out openPtrMsg))
+		{
+			_status = $"get_encode_preset_count_bind_failed:{openPtrMsg}";
+			throw new NotSupportedException($"NVENC get-encode-preset-count bind failed: {openPtrMsg}");
+		}
+		if (!NvencApiBootstrap.TryBindGetEncodePresetGuidsDelegate(
 			_getEncodePresetGuidsPtr,
 			out _getEncodePresetGuids,
-			out _);
+			out openPtrMsg))
+		{
+			_status = $"get_encode_preset_guids_bind_failed:{openPtrMsg}";
+			throw new NotSupportedException($"NVENC get-encode-preset-guids bind failed: {openPtrMsg}");
+		}
 
 		if (!NvencApiBootstrap.TryBindInitializeEncoderDelegate(
 			_initializeEncoderPtr,
@@ -482,23 +504,45 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 		var getPresetCount = _getEncodePresetCount;
 		var getPresetGuids = _getEncodePresetGuids;
-		if (getPresetCount != null && getPresetGuids != null)
+		if (getPresetCount == null || getPresetGuids == null)
 		{
-			_getEncodePresetCountRc = QueryPresetGuidCount(
-				_encoderSession,
-				getPresetCount,
-				_selectedCodecGuid,
-				out _presetGuidCount);
+			_status = "preset_query_delegate_null";
+			throw new NotSupportedException("NVENC preset query delegates are null.");
+		}
 
-			if (_getEncodePresetCountRc == 0 && _presetGuidCount > 0)
-			{
-				_getEncodePresetGuidsRc = QueryPresetGuids(
-					_encoderSession,
-					getPresetGuids,
-					_selectedCodecGuid,
-					_presetGuidCount,
-					out _selectedPresetGuid);
-			}
+		_getEncodePresetCountRc = QueryPresetGuidCount(
+			_encoderSession,
+			getPresetCount,
+			_selectedCodecGuid,
+			out _presetGuidCount);
+		if (_getEncodePresetCountRc != 0)
+		{
+			_status = $"get_encode_preset_count_failed:{NvencNative.ResultToString(_getEncodePresetCountRc)}";
+			throw new NotSupportedException($"NVENC get encode preset count failed: {NvencNative.ResultToString(_getEncodePresetCountRc)}");
+		}
+
+		if (_presetGuidCount == 0)
+		{
+			_status = "get_encode_preset_count_zero";
+			throw new NotSupportedException("NVENC reported zero presets for selected codec.");
+		}
+
+		_getEncodePresetGuidsRc = QueryPresetGuids(
+			_encoderSession,
+			getPresetGuids,
+			_selectedCodecGuid,
+			_presetGuidCount,
+			out _selectedPresetGuid);
+		if (_getEncodePresetGuidsRc != 0)
+		{
+			_status = $"get_encode_preset_guids_failed:{NvencNative.ResultToString(_getEncodePresetGuidsRc)}";
+			throw new NotSupportedException($"NVENC get encode preset guids failed: {NvencNative.ResultToString(_getEncodePresetGuidsRc)}");
+		}
+
+		if (_selectedPresetGuid == Guid.Empty)
+		{
+			_status = "selected_preset_guid_empty";
+			throw new NotSupportedException("NVENC preset enumeration returned no selectable preset GUID.");
 		}
 
 		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_presetCount={_presetGuidCount}_selectedPresetGuid={_selectedPresetGuid}_initBound={(_initializeEncoder != null ? 1 : 0)}_but_not_implemented";

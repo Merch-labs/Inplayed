@@ -7,9 +7,18 @@ internal static class NvencFunctionListInspector
 		bool HasGetEncodeGuidCount,
 		bool HasGetEncodeProfileGuidCount,
 		bool HasGetEncodeGuids,
-		bool HasInitializeEncoder)
+		bool HasInitializeEncoder,
+		bool HasGetEncodePresetCount,
+		bool HasGetEncodePresetGuids)
 	{
-		public bool AllPresent => HasOpenSession && HasGetEncodeGuidCount && HasGetEncodeProfileGuidCount && HasGetEncodeGuids && HasInitializeEncoder;
+		public bool AllPresent =>
+			HasOpenSession &&
+			HasGetEncodeGuidCount &&
+			HasGetEncodeProfileGuidCount &&
+			HasGetEncodeGuids &&
+			HasInitializeEncoder &&
+			HasGetEncodePresetCount &&
+			HasGetEncodePresetGuids;
 	}
 
 	public static IntPtr ReadPointerAtSlot(IntPtr functionListBuffer, int slot)
@@ -33,6 +42,15 @@ internal static class NvencFunctionListInspector
 		var getEncodeProfileGuidCount = ReadPointerAtSlot(functionListBuffer, 2) != IntPtr.Zero;
 		var getEncodeGuids = ReadPointerAtSlot(functionListBuffer, 3) != IntPtr.Zero;
 		var initializeEncoder = ReadPointerAtSlot(functionListBuffer, 12) != IntPtr.Zero;
-		return new RequiredSlotsState(openSession, getEncodeGuidCount, getEncodeProfileGuidCount, getEncodeGuids, initializeEncoder);
+		var getEncodePresetCount = ReadPointerAtSlot(functionListBuffer, 8) != IntPtr.Zero;
+		var getEncodePresetGuids = ReadPointerAtSlot(functionListBuffer, 9) != IntPtr.Zero;
+		return new RequiredSlotsState(
+			openSession,
+			getEncodeGuidCount,
+			getEncodeProfileGuidCount,
+			getEncodeGuids,
+			initializeEncoder,
+			getEncodePresetCount,
+			getEncodePresetGuids);
 	}
 }

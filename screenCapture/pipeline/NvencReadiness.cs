@@ -6,4 +6,5 @@ public readonly record struct NvencReadiness(
 	int FunctionPointerCount,
 	bool RequiredSlotsPresent,
 	bool OpenSessionBindable,
-	bool InitializeEncoderBindable);
+	bool InitializeEncoderBindable,
+	bool PresetApiBindable);
