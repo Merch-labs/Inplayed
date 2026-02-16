@@ -54,6 +54,10 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 			}
 
 			var start = FindKeyframeStart(windowStart);
+			if (start == null)
+			{
+				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
+			}
 			var list = new List<EncodedPacket>(_packets.Count);
 			for (var node = start; node != null; node = node.Next)
 			{
@@ -64,7 +68,7 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 		}
 	}
 
-	private LinkedListNode<BufferedPacket> FindKeyframeStart(LinkedListNode<BufferedPacket> windowStart)
+	private LinkedListNode<BufferedPacket>? FindKeyframeStart(LinkedListNode<BufferedPacket> windowStart)
 	{
 		LinkedListNode<BufferedPacket>? start = null;
 
@@ -89,7 +93,10 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 			}
 		}
 
-		start ??= windowStart;
+		if (start == null)
+		{
+			return null;
+		}
 
 		for (var node = start.Previous; node != null; node = node.Previous)
 		{
