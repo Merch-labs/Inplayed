@@ -134,6 +134,7 @@ internal static class NvencNative
 	public const uint NV_ENC_REGISTER_RESOURCE_VER = 1;
 	public const uint NV_ENC_MAP_INPUT_RESOURCE_VER = 1;
 	public const uint NV_ENC_PIC_PARAMS_VER = 1;
+	public const uint NV_ENC_LOCK_BITSTREAM_VER = 1;
 	public const uint NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX = 0;
 	public const uint NV_ENC_BUFFER_FORMAT_ARGB = 0;
 	public const uint NV_ENC_PIC_STRUCT_FRAME = 1;
@@ -243,5 +244,28 @@ internal static class NvencNative
 		public uint sliceMode;
 		public uint sliceModeData;
 		public IntPtr codecPicParams;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_LOCK_BITSTREAM
+	{
+		public uint version;
+		public uint doNotWait;
+		public uint getRCStats;
+		public uint reservedBitFields;
+		public IntPtr outputBitstream;
+		public IntPtr sliceOffsets;
+		public uint frameIdx;
+		public uint hwEncodeStatus;
+		public IntPtr bitstreamBufferPtr;
+		public uint bitstreamSizeInBytes;
+		public uint bitstreamTimeStamp;
+		public uint bitstreamDuration;
+		public uint pictureType;
+		public uint pictureStruct;
+		public uint frameAvgQP;
+		public uint frameSatd;
+		public uint ltrFrame;
+		public uint ltrFrameIdx;
 	}
 }
