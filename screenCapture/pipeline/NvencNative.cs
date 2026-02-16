@@ -72,6 +72,16 @@ internal static class NvencNative
 		return (size & 0xFFFFu) | ((structVersion & 0xFFFFu) << 16) | (0x7u << 28);
 	}
 
+	public static bool IsApiCompatible(uint maxSupportedVersion, uint requestedApiVersion)
+	{
+		// Compare major.minor words packed by NVENC.
+		var maxHi = (maxSupportedVersion >> 16) & 0xFFFFu;
+		var maxLo = maxSupportedVersion & 0xFFFFu;
+		var reqHi = (requestedApiVersion >> 16) & 0xFFFFu;
+		var reqLo = requestedApiVersion & 0xFFFFu;
+		return maxHi > reqHi || (maxHi == reqHi && maxLo >= reqLo);
+	}
+
 	public const uint NVENCAPI_VERSION = 0x000B0000;
 	public const uint NV_ENC_DEVICE_TYPE_DIRECTX = 1;
 

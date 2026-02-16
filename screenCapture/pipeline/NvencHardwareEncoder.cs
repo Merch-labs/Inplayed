@@ -37,6 +37,11 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 				return new NvencReadiness(false, $"max_version_query_failed:{NvencNative.ResultToString(maxRc)}", 0, 0, 0, false, false);
 			}
 
+			if (!NvencNative.IsApiCompatible(maxVersion, NvencNative.NVENCAPI_VERSION))
+			{
+				return new NvencReadiness(false, $"api_version_too_old:max=0x{maxVersion:X8};required=0x{NvencNative.NVENCAPI_VERSION:X8}", maxVersion, 0, 0, false, false);
+			}
+
 			fnList = NvencFunctionList.Allocate(maxVersion, out _);
 			var ciRc = createInstance(fnList);
 			if (ciRc != 0)
@@ -231,6 +236,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			var rcName = NvencNative.ResultToString(rc);
 			_status = $"max_version_query_failed:{rcName}";
 			throw new NotSupportedException($"NVENC max supported version query failed: {rcName}");
+		}
+
+		if (!NvencNative.IsApiCompatible(_maxSupportedVersion, NvencNative.NVENCAPI_VERSION))
+		{
+			_status = $"api_version_too_old:max=0x{_maxSupportedVersion:X8};required=0x{NvencNative.NVENCAPI_VERSION:X8}";
+			throw new NotSupportedException(
+				$"NVENC runtime is too old. Max=0x{_maxSupportedVersion:X8}, required=0x{NvencNative.NVENCAPI_VERSION:X8}.");
 		}
 
 		_functionListBuffer = NvencFunctionList.Allocate(_maxSupportedVersion, out _functionListVersion);
