@@ -2,6 +2,9 @@ using System.Runtime.InteropServices;
 
 internal static class NvencNative
 {
+	public static readonly Guid NV_ENC_CODEC_H264_GUID = new("6BC82762-4E63-4CA4-AA85-1E50F321F6BF");
+	public static readonly Guid NV_ENC_CODEC_HEVC_GUID = new("790CDC88-4522-4D7B-9425-BDA9975F7603");
+
 	public const uint NV_ENC_SUCCESS = 0;
 	public const uint NV_ENC_ERR_NO_ENCODE_DEVICE = 2;
 	public const uint NV_ENC_ERR_UNSUPPORTED_DEVICE = 4;
@@ -21,7 +24,22 @@ internal static class NvencNative
 	public delegate int NvEncGetEncodeGuidCountDelegate(IntPtr encoderSession, out uint guidCount);
 
 	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncGetEncodeGUIDsDelegate(
+		IntPtr encoderSession,
+		IntPtr guids,
+		uint guidArraySize,
+		out uint guidCount);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
 	public delegate int NvEncGetEncodeProfileGuidCountDelegate(IntPtr encoderSession, IntPtr encodeGuid, out uint profileGuidCount);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncGetEncodeProfileGUIDsDelegate(
+		IntPtr encoderSession,
+		IntPtr encodeGuid,
+		IntPtr profileGuids,
+		uint guidArraySize,
+		out uint guidCount);
 
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	public delegate int CuInitDelegate(uint flags);

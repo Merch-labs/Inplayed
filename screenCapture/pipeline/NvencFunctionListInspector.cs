@@ -5,9 +5,10 @@ internal static class NvencFunctionListInspector
 	public readonly record struct RequiredSlotsState(
 		bool HasOpenSession,
 		bool HasGetEncodeGuidCount,
-		bool HasGetEncodeProfileGuidCount)
+		bool HasGetEncodeProfileGuidCount,
+		bool HasGetEncodeGuids)
 	{
-		public bool AllPresent => HasOpenSession && HasGetEncodeGuidCount && HasGetEncodeProfileGuidCount;
+		public bool AllPresent => HasOpenSession && HasGetEncodeGuidCount && HasGetEncodeProfileGuidCount && HasGetEncodeGuids;
 	}
 
 	public static IntPtr ReadPointerAtSlot(IntPtr functionListBuffer, int slot)
@@ -29,6 +30,7 @@ internal static class NvencFunctionListInspector
 		var openSession = ReadPointerAtSlot(functionListBuffer, 0) != IntPtr.Zero;
 		var getEncodeGuidCount = ReadPointerAtSlot(functionListBuffer, 1) != IntPtr.Zero;
 		var getEncodeProfileGuidCount = ReadPointerAtSlot(functionListBuffer, 2) != IntPtr.Zero;
-		return new RequiredSlotsState(openSession, getEncodeGuidCount, getEncodeProfileGuidCount);
+		var getEncodeGuids = ReadPointerAtSlot(functionListBuffer, 3) != IntPtr.Zero;
+		return new RequiredSlotsState(openSession, getEncodeGuidCount, getEncodeProfileGuidCount, getEncodeGuids);
 	}
 }
