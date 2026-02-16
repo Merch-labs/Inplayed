@@ -6,5 +6,5 @@ public sealed class RecordingSettings
 	public int Bitrate { get; set; }
 	public int ClipSeconds { get; set; }
 
-	public CaptureTarget Target { get; set; }
+	public CaptureTarget Target { get; set; } = new MonitorTarget { MonitorIndex = 0 };
 }

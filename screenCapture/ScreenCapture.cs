@@ -102,7 +102,7 @@ internal sealed class WgcCaptureCore : IDisposable
 		try
 		{
 			var accessIid = typeof(IDirect3DDxgiInterfaceAccess).GUID;
-			var hr = Marshal.QueryInterface(surfaceAbi, ref accessIid, out var accessPtr);
+			var hr = Marshal.QueryInterface(surfaceAbi, in accessIid, out var accessPtr);
 			if (hr < 0)
 			{
 				Marshal.ThrowExceptionForHR(hr);
