@@ -130,6 +130,7 @@ internal static class NvencNative
 	public const uint NV_ENC_DEVICE_TYPE_DIRECTX = 1;
 	public const uint NV_ENC_INITIALIZE_PARAMS_VER = 1;
 	public const uint NV_ENC_CONFIG_VER = 1;
+	public const uint NV_ENC_CREATE_BITSTREAM_BUFFER_VER = 1;
 
 	[StructLayout(LayoutKind.Sequential)]
 	public struct NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS
@@ -179,5 +180,16 @@ internal static class NvencNative
 		public uint reserved4;
 		public uint reserved5;
 		public uint reserved6;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_CREATE_BITSTREAM_BUFFER
+	{
+		public uint version;
+		public uint size;
+		public uint memoryHeap;
+		public uint reserved;
+		public IntPtr bitstreamBuffer;
+		public IntPtr bitstreamBufferPtr;
 	}
 }

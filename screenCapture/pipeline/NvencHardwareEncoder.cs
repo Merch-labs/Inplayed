@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 
 public sealed class NvencHardwareEncoder : IHardwareEncoder
 {
+	private const int BitstreamBufferCount = 4;
 	public static NvencReadiness ProbeReadiness()
 	{
 		if (!GpuCapabilityProbe.IsNvidiaAdapterPresent())
@@ -186,6 +187,10 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private NvencNative.NvEncUnregisterResourceDelegate? _unregisterResource;
 	private NvencNative.NvEncDestroyEncoderDelegate? _destroyEncoder;
 	private int _initializeEncoderRc;
+	private IntPtr[] _bitstreamBuffers = Array.Empty<IntPtr>();
+	private int _bitstreamBufferCreateFailures;
+	private int _bitstreamBufferDestroyFailures;
+	private int _destroyEncoderRc;
 	private int _getEncodeGuidCountRc;
 	private uint _encodeGuidCount;
 	private int _getEncodeGuidsRc;
@@ -732,7 +737,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC initialize encoder failed: {NvencNative.ResultToString(_initializeEncoderRc)}");
 		}
 
-		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_selectedProfileGuid={_selectedProfileGuid}_presetCount={_presetGuidCount}_selectedPresetGuid={_selectedPresetGuid}_initBound={(_initializeEncoder != null ? 1 : 0)}_initRc={NvencNative.ResultToString(_initializeEncoderRc)}_coreEncodeApiBound={(_createBitstreamBuffer != null && _destroyBitstreamBuffer != null && _encodePicture != null && _lockBitstream != null && _unlockBitstream != null && _mapInputResource != null && _unmapInputResource != null && _registerResource != null && _unregisterResource != null && _destroyEncoder != null ? 1 : 0)}_but_not_implemented";
+		InitializeBitstreamBufferPool();
+
+		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_selectedProfileGuid={_selectedProfileGuid}_presetCount={_presetGuidCount}_selectedPresetGuid={_selectedPresetGuid}_initBound={(_initializeEncoder != null ? 1 : 0)}_initRc={NvencNative.ResultToString(_initializeEncoderRc)}_bitstreamBuffers={_bitstreamBuffers.Length}_coreEncodeApiBound={(_createBitstreamBuffer != null && _destroyBitstreamBuffer != null && _encodePicture != null && _lockBitstream != null && _unlockBitstream != null && _mapInputResource != null && _unmapInputResource != null && _registerResource != null && _unregisterResource != null && _destroyEncoder != null ? 1 : 0)}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -758,7 +765,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};openSessionRc={NvencNative.ResultToString(_openSessionRc)};encoderSession=0x{_encoderSession.ToInt64():X};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeGuidCountBound={(_getEncodeGuidCount != null ? 1 : 0)};getEncodeGuidCountRc={NvencNative.ResultToString(_getEncodeGuidCountRc)};getEncodeGuidsPtr=0x{_getEncodeGuidsPtr.ToInt64():X};getEncodeGuidsBound={(_getEncodeGuids != null ? 1 : 0)};getEncodeGuidsRc={NvencNative.ResultToString(_getEncodeGuidsRc)};codecCount={_encodeGuidCount};supportsH264={_supportsH264};supportsHevc={_supportsHevc};selectedCodec={_selectedCodecName};selectedCodecGuid={_selectedCodecGuid};selectedProfileGuid={_selectedProfileGuid};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountBound={(_getEncodeProfileGuidCount != null ? 1 : 0)};getEncodeProfileGuidsPtr=0x{_getEncodeProfileGuidsPtr.ToInt64():X};getEncodeProfileGuidsBound={(_getEncodeProfileGuids != null ? 1 : 0)};getEncodeProfileGuidsRc={NvencNative.ResultToString(_getEncodeProfileGuidsRc)};getEncodePresetCountPtr=0x{_getEncodePresetCountPtr.ToInt64():X};getEncodePresetCountBound={(_getEncodePresetCount != null ? 1 : 0)};getEncodePresetCountRc={NvencNative.ResultToString(_getEncodePresetCountRc)};getEncodePresetGuidsPtr=0x{_getEncodePresetGuidsPtr.ToInt64():X};getEncodePresetGuidsBound={(_getEncodePresetGuids != null ? 1 : 0)};getEncodePresetGuidsRc={NvencNative.ResultToString(_getEncodePresetGuidsRc)};presetCount={_presetGuidCount};selectedPresetGuid={_selectedPresetGuid};initializeEncoderPtr=0x{_initializeEncoderPtr.ToInt64():X};initializeEncoderBound={(_initializeEncoder != null ? 1 : 0)};initializeEncoderRc={NvencNative.ResultToString(_initializeEncoderRc)};createBitstreamBufferPtr=0x{_createBitstreamBufferPtr.ToInt64():X};createBitstreamBufferBound={(_createBitstreamBuffer != null ? 1 : 0)};destroyBitstreamBufferPtr=0x{_destroyBitstreamBufferPtr.ToInt64():X};destroyBitstreamBufferBound={(_destroyBitstreamBuffer != null ? 1 : 0)};encodePicturePtr=0x{_encodePicturePtr.ToInt64():X};encodePictureBound={(_encodePicture != null ? 1 : 0)};lockBitstreamPtr=0x{_lockBitstreamPtr.ToInt64():X};lockBitstreamBound={(_lockBitstream != null ? 1 : 0)};unlockBitstreamPtr=0x{_unlockBitstreamPtr.ToInt64():X};unlockBitstreamBound={(_unlockBitstream != null ? 1 : 0)};mapInputResourcePtr=0x{_mapInputResourcePtr.ToInt64():X};mapInputResourceBound={(_mapInputResource != null ? 1 : 0)};unmapInputResourcePtr=0x{_unmapInputResourcePtr.ToInt64():X};unmapInputResourceBound={(_unmapInputResource != null ? 1 : 0)};registerResourcePtr=0x{_registerResourcePtr.ToInt64():X};registerResourceBound={(_registerResource != null ? 1 : 0)};unregisterResourcePtr=0x{_unregisterResourcePtr.ToInt64():X};unregisterResourceBound={(_unregisterResource != null ? 1 : 0)};destroyEncoderPtr=0x{_destroyEncoderPtr.ToInt64():X};destroyEncoderBound={(_destroyEncoder != null ? 1 : 0)};h264ProfileCount={_h264ProfileGuidCount};h264ProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountH264Rc)};hevcProfileCount={_hevcProfileGuidCount};hevcProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountHevcRc)}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};openSessionRc={NvencNative.ResultToString(_openSessionRc)};encoderSession=0x{_encoderSession.ToInt64():X};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeGuidCountBound={(_getEncodeGuidCount != null ? 1 : 0)};getEncodeGuidCountRc={NvencNative.ResultToString(_getEncodeGuidCountRc)};getEncodeGuidsPtr=0x{_getEncodeGuidsPtr.ToInt64():X};getEncodeGuidsBound={(_getEncodeGuids != null ? 1 : 0)};getEncodeGuidsRc={NvencNative.ResultToString(_getEncodeGuidsRc)};codecCount={_encodeGuidCount};supportsH264={_supportsH264};supportsHevc={_supportsHevc};selectedCodec={_selectedCodecName};selectedCodecGuid={_selectedCodecGuid};selectedProfileGuid={_selectedProfileGuid};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountBound={(_getEncodeProfileGuidCount != null ? 1 : 0)};getEncodeProfileGuidsPtr=0x{_getEncodeProfileGuidsPtr.ToInt64():X};getEncodeProfileGuidsBound={(_getEncodeProfileGuids != null ? 1 : 0)};getEncodeProfileGuidsRc={NvencNative.ResultToString(_getEncodeProfileGuidsRc)};getEncodePresetCountPtr=0x{_getEncodePresetCountPtr.ToInt64():X};getEncodePresetCountBound={(_getEncodePresetCount != null ? 1 : 0)};getEncodePresetCountRc={NvencNative.ResultToString(_getEncodePresetCountRc)};getEncodePresetGuidsPtr=0x{_getEncodePresetGuidsPtr.ToInt64():X};getEncodePresetGuidsBound={(_getEncodePresetGuids != null ? 1 : 0)};getEncodePresetGuidsRc={NvencNative.ResultToString(_getEncodePresetGuidsRc)};presetCount={_presetGuidCount};selectedPresetGuid={_selectedPresetGuid};initializeEncoderPtr=0x{_initializeEncoderPtr.ToInt64():X};initializeEncoderBound={(_initializeEncoder != null ? 1 : 0)};initializeEncoderRc={NvencNative.ResultToString(_initializeEncoderRc)};createBitstreamBufferPtr=0x{_createBitstreamBufferPtr.ToInt64():X};createBitstreamBufferBound={(_createBitstreamBuffer != null ? 1 : 0)};destroyBitstreamBufferPtr=0x{_destroyBitstreamBufferPtr.ToInt64():X};destroyBitstreamBufferBound={(_destroyBitstreamBuffer != null ? 1 : 0)};bitstreamBufferCount={_bitstreamBuffers.Length};bitstreamBufferCreateFailures={_bitstreamBufferCreateFailures};bitstreamBufferDestroyFailures={_bitstreamBufferDestroyFailures};encodePicturePtr=0x{_encodePicturePtr.ToInt64():X};encodePictureBound={(_encodePicture != null ? 1 : 0)};lockBitstreamPtr=0x{_lockBitstreamPtr.ToInt64():X};lockBitstreamBound={(_lockBitstream != null ? 1 : 0)};unlockBitstreamPtr=0x{_unlockBitstreamPtr.ToInt64():X};unlockBitstreamBound={(_unlockBitstream != null ? 1 : 0)};mapInputResourcePtr=0x{_mapInputResourcePtr.ToInt64():X};mapInputResourceBound={(_mapInputResource != null ? 1 : 0)};unmapInputResourcePtr=0x{_unmapInputResourcePtr.ToInt64():X};unmapInputResourceBound={(_unmapInputResource != null ? 1 : 0)};registerResourcePtr=0x{_registerResourcePtr.ToInt64():X};registerResourceBound={(_registerResource != null ? 1 : 0)};unregisterResourcePtr=0x{_unregisterResourcePtr.ToInt64():X};unregisterResourceBound={(_unregisterResource != null ? 1 : 0)};destroyEncoderPtr=0x{_destroyEncoderPtr.ToInt64():X};destroyEncoderBound={(_destroyEncoder != null ? 1 : 0)};destroyEncoderRc={NvencNative.ResultToString(_destroyEncoderRc)};h264ProfileCount={_h264ProfileGuidCount};h264ProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountH264Rc)};hevcProfileCount={_hevcProfileGuidCount};hevcProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountHevcRc)}";
 	}
 
 	public void Stop()
@@ -767,6 +774,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public void Dispose()
 	{
+		DestroyBitstreamBuffers();
+		DestroyEncoderSession();
+
 		if (_nvencLib != IntPtr.Zero)
 		{
 			try
@@ -859,6 +869,10 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
 		_initializeEncoderRc = 0;
+		_bitstreamBuffers = Array.Empty<IntPtr>();
+		_bitstreamBufferCreateFailures = 0;
+		_bitstreamBufferDestroyFailures = 0;
+		_destroyEncoderRc = 0;
 		_bootstrapDevice?.Dispose();
 		_bootstrapDevice = null;
 	}
@@ -886,6 +900,97 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		var v = Math.Max(2, value);
 		return (uint)(v & ~1);
+	}
+
+	private void InitializeBitstreamBufferPool()
+	{
+		var createBitstream = _createBitstreamBuffer;
+		if (createBitstream == null)
+		{
+			_status = "create_bitstream_buffer_delegate_null";
+			throw new NotSupportedException("NVENC create bitstream buffer delegate is null.");
+		}
+
+		var buffers = new IntPtr[BitstreamBufferCount];
+		for (var i = 0; i < buffers.Length; i++)
+		{
+			var createParams = new NvencNative.NV_ENC_CREATE_BITSTREAM_BUFFER
+			{
+				version = NvencNative.EncodeStructVersion<NvencNative.NV_ENC_CREATE_BITSTREAM_BUFFER>(NvencNative.NV_ENC_CREATE_BITSTREAM_BUFFER_VER),
+				size = 2 * 1024 * 1024
+			};
+			var createPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_CREATE_BITSTREAM_BUFFER>());
+			try
+			{
+				Marshal.StructureToPtr(createParams, createPtr, false);
+				var rc = createBitstream(_encoderSession, createPtr);
+				if (rc != 0)
+				{
+					_bitstreamBufferCreateFailures++;
+					_status = $"create_bitstream_buffer_failed:index={i};rc={NvencNative.ResultToString(rc)}";
+					throw new NotSupportedException($"NVENC create bitstream buffer failed at index {i}: {NvencNative.ResultToString(rc)}");
+				}
+
+				var created = Marshal.PtrToStructure<NvencNative.NV_ENC_CREATE_BITSTREAM_BUFFER>(createPtr);
+				if (created.bitstreamBuffer == IntPtr.Zero)
+				{
+					_bitstreamBufferCreateFailures++;
+					_status = $"create_bitstream_buffer_empty:index={i}";
+					throw new NotSupportedException($"NVENC created empty bitstream buffer at index {i}.");
+				}
+
+				buffers[i] = created.bitstreamBuffer;
+			}
+			finally
+			{
+				Marshal.FreeHGlobal(createPtr);
+			}
+		}
+
+		_bitstreamBuffers = buffers;
+	}
+
+	private void DestroyBitstreamBuffers()
+	{
+		var destroyBitstream = _destroyBitstreamBuffer;
+		if (destroyBitstream == null || _encoderSession == IntPtr.Zero || _bitstreamBuffers.Length == 0)
+		{
+			_bitstreamBuffers = Array.Empty<IntPtr>();
+			return;
+		}
+
+		for (var i = 0; i < _bitstreamBuffers.Length; i++)
+		{
+			var buffer = _bitstreamBuffers[i];
+			if (buffer == IntPtr.Zero)
+			{
+				continue;
+			}
+
+			var rc = destroyBitstream(_encoderSession, buffer);
+			if (rc != 0)
+			{
+				_bitstreamBufferDestroyFailures++;
+			}
+		}
+
+		_bitstreamBuffers = Array.Empty<IntPtr>();
+	}
+
+	private void DestroyEncoderSession()
+	{
+		if (_encoderSession == IntPtr.Zero)
+		{
+			return;
+		}
+
+		var destroyEncoder = _destroyEncoder;
+		if (destroyEncoder != null)
+		{
+			_destroyEncoderRc = destroyEncoder(_encoderSession);
+		}
+
+		_encoderSession = IntPtr.Zero;
 	}
 
 	private static int QueryProfileGuidCount(
