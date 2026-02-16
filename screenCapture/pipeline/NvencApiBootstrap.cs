@@ -57,4 +57,56 @@ internal static class NvencApiBootstrap
 			return false;
 		}
 	}
+
+	public static bool TryBindGetEncodeGuidCountDelegate(
+		IntPtr getEncodeGuidCountPtr,
+		out NvencNative.NvEncGetEncodeGuidCountDelegate? del,
+		out string message)
+	{
+		del = null;
+		message = "unknown";
+		if (getEncodeGuidCountPtr == IntPtr.Zero)
+		{
+			message = "getEncodeGuidCount pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncGetEncodeGuidCountDelegate>(getEncodeGuidCountPtr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
+
+	public static bool TryBindGetEncodeProfileGuidCountDelegate(
+		IntPtr getEncodeProfileGuidCountPtr,
+		out NvencNative.NvEncGetEncodeProfileGuidCountDelegate? del,
+		out string message)
+	{
+		del = null;
+		message = "unknown";
+		if (getEncodeProfileGuidCountPtr == IntPtr.Zero)
+		{
+			message = "getEncodeProfileGuidCount pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncGetEncodeProfileGuidCountDelegate>(getEncodeProfileGuidCountPtr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }
