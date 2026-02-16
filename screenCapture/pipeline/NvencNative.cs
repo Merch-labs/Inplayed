@@ -128,6 +128,8 @@ internal static class NvencNative
 
 	public const uint NVENCAPI_VERSION = 0x000B0000;
 	public const uint NV_ENC_DEVICE_TYPE_DIRECTX = 1;
+	public const uint NV_ENC_INITIALIZE_PARAMS_VER = 1;
+	public const uint NV_ENC_CONFIG_VER = 1;
 
 	[StructLayout(LayoutKind.Sequential)]
 	public struct NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS
@@ -137,5 +139,45 @@ internal static class NvencNative
 		public IntPtr device;
 		public IntPtr reserved;
 		public uint apiVersion;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_INITIALIZE_PARAMS
+	{
+		public uint version;
+		public Guid encodeGUID;
+		public Guid presetGUID;
+		public uint encodeWidth;
+		public uint encodeHeight;
+		public uint darWidth;
+		public uint darHeight;
+		public uint frameRateNum;
+		public uint frameRateDen;
+		public uint enableEncodeAsync;
+		public uint enablePTD;
+		public uint reportSliceOffsets;
+		public uint enableSubFrameWrite;
+		public uint enableExternalMEHints;
+		public uint enableMEOnlyMode;
+		public uint enableWeightedPrediction;
+		public uint reservedBitFields;
+		public uint privDataSize;
+		public IntPtr privData;
+		public IntPtr encodeConfig;
+		public uint maxEncodeWidth;
+		public uint maxEncodeHeight;
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_CONFIG
+	{
+		public uint version;
+		public uint reserved0;
+		public uint reserved1;
+		public uint reserved2;
+		public uint reserved3;
+		public uint reserved4;
+		public uint reserved5;
+		public uint reserved6;
 	}
 }
