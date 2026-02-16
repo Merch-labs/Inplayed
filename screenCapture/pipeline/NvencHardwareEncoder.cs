@@ -216,6 +216,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private IntPtr _mapParamsPtr;
 	private IntPtr _picParamsPtr;
 	private IntPtr _lockParamsPtr;
+	private RecordingSettings? _activeSettings;
 	private int _getEncodeGuidCountRc;
 	private uint _encodeGuidCount;
 	private int _getEncodeGuidsRc;
@@ -236,6 +237,14 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public void Start(RecordingSettings settings)
 	{
+		if (_running)
+		{
+			return;
+		}
+
+		CleanupBeforeStart();
+		_activeSettings = CloneSettings(settings);
+
 		if (!GpuCapabilityProbe.IsNvidiaAdapterPresent())
 		{
 			_status = "nvidia_adapter_not_detected";
@@ -868,9 +877,27 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public void Reconfigure(int width, int height)
 	{
-		_ = width;
-		_ = height;
-		_status = "reconfigure_requested_not_implemented";
+		if (!_running || _activeSettings == null)
+		{
+			_status = "reconfigure_ignored_not_running";
+			return;
+		}
+
+		var nextWidth = (int)NormalizeDimension(width);
+		var nextHeight = (int)NormalizeDimension(height);
+		if (nextWidth == _activeSettings.Width && nextHeight == _activeSettings.Height)
+		{
+			_status = "reconfigure_noop_same_dimensions";
+			return;
+		}
+
+		var next = CloneSettings(_activeSettings);
+		next.Width = nextWidth;
+		next.Height = nextHeight;
+		_status = $"reconfigure_restart_requested:{nextWidth}x{nextHeight}";
+		Stop();
+		Start(next);
+		_status = $"reconfigured:{nextWidth}x{nextHeight}";
 	}
 
 	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
@@ -1028,6 +1055,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_mapParamsPtr = IntPtr.Zero;
 		_picParamsPtr = IntPtr.Zero;
 		_lockParamsPtr = IntPtr.Zero;
+		_activeSettings = null;
 		_running = false;
 		_bootstrapDevice?.Dispose();
 		_bootstrapDevice = null;
@@ -1056,6 +1084,54 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		var v = Math.Max(2, value);
 		return (uint)(v & ~1);
+	}
+
+	private static RecordingSettings CloneSettings(RecordingSettings settings)
+	{
+		return new RecordingSettings
+		{
+			Width = settings.Width,
+			Height = settings.Height,
+			Fps = settings.Fps,
+			Bitrate = settings.Bitrate,
+			ClipSeconds = settings.ClipSeconds,
+			Target = settings.Target
+		};
+	}
+
+	private void CleanupBeforeStart()
+	{
+		DestroyBitstreamBuffers();
+		UnregisterAllResources();
+		DestroyEncoderSession();
+		ReleaseReusableStructBuffers();
+		NvencFunctionList.Free(ref _functionListBuffer);
+		_functionListVersion = 0;
+		if (_nvencLib != IntPtr.Zero)
+		{
+			try
+			{
+				NativeLibrary.Free(_nvencLib);
+			}
+			catch
+			{
+			}
+
+			_nvencLib = IntPtr.Zero;
+		}
+
+		if (_cudaLib != IntPtr.Zero)
+		{
+			try
+			{
+				NativeLibrary.Free(_cudaLib);
+			}
+			catch
+			{
+			}
+
+			_cudaLib = IntPtr.Zero;
+		}
 	}
 
 	private void EnsureReusableStructBuffers()
