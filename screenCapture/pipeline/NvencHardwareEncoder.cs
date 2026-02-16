@@ -982,6 +982,31 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 					Interlocked.Increment(ref _flushRecoveredCount);
 					return _clipWriter.WriteAsync(outputPath, snapshot, token);
 				}
+
+				lock (_sync)
+				{
+					if (_running)
+					{
+						_forceNextIdr = true;
+					}
+				}
+
+				Thread.Sleep(60);
+
+				lock (_sync)
+				{
+					if (_running)
+					{
+						DrainPendingBitstreams(maxPasses: 32, doNotWait: false);
+					}
+				}
+
+				snapshot = ring.SnapshotLast(clipLength);
+				if (snapshot.Packets.Count > 0)
+				{
+					Interlocked.Increment(ref _flushRecoveredCount);
+					return _clipWriter.WriteAsync(outputPath, snapshot, token);
+				}
 			}
 
 			Interlocked.Increment(ref _flushEmptySnapshotCount);
