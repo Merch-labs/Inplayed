@@ -34,14 +34,14 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 
 	public EncodedPacketSnapshot SnapshotLast(TimeSpan duration)
 	{
-		var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 		var keep = duration <= TimeSpan.Zero ? _retention : duration;
 
 		lock (_gate)
 		{
-			TrimLocked(nowMs, _retention);
+			var latestTimestampMs = _packets.Last?.Value.TimestampMs ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+			TrimLocked(latestTimestampMs, _retention);
 
-			var minTimeMs = nowMs - (long)keep.TotalMilliseconds;
+			var minTimeMs = latestTimestampMs - (long)keep.TotalMilliseconds;
 			var list = new List<EncodedPacket>(_packets.Count);
 			for (var node = _packets.First; node != null; node = node.Next)
 			{
