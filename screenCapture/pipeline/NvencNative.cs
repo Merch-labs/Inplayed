@@ -41,4 +41,23 @@ internal static class NvencNative
 	{
 		return code == 0 ? "CUDA_SUCCESS" : $"CUDA_ERR_{code}";
 	}
+
+	public static uint EncodeStructVersion<T>(uint structVersion) where T : struct
+	{
+		var size = (uint)Marshal.SizeOf<T>();
+		return (size & 0xFFFFu) | ((structVersion & 0xFFFFu) << 16) | (0x7u << 28);
+	}
+
+	public const uint NVENCAPI_VERSION = 0x000B0000;
+	public const uint NV_ENC_DEVICE_TYPE_DIRECTX = 1;
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS
+	{
+		public uint version;
+		public uint deviceType;
+		public IntPtr device;
+		public IntPtr reserved;
+		public uint apiVersion;
+	}
 }

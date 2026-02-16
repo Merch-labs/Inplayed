@@ -122,6 +122,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private int _functionPointerCount;
 	private IntPtr _openSessionPtr;
 	private NvencNative.NvEncOpenEncodeSessionExDelegate? _openSession;
+	private int _openSessionRc;
+	private IntPtr _encoderSession;
+	private D3D11DeviceBundle? _bootstrapDevice;
 	private IntPtr _getEncodeGuidCountPtr;
 	private IntPtr _getEncodeProfileGuidCountPtr;
 
@@ -247,7 +250,42 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException($"NVENC open-session delegate bind failed: {openPtrMsg}");
 		}
 
-		_status = $"create_instance_ok_fnptrs={_functionPointerCount}_openSessionBound=1_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_but_not_implemented";
+		var openSession = _openSession;
+		if (openSession == null)
+		{
+			_status = "open_session_delegate_null";
+			throw new NotSupportedException("NVENC open-session delegate is null.");
+		}
+
+		_bootstrapDevice = D3D11Helper.CreateDevice();
+		var openParams = new NvencNative.NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS
+		{
+			version = NvencNative.EncodeStructVersion<NvencNative.NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS>(1),
+			deviceType = NvencNative.NV_ENC_DEVICE_TYPE_DIRECTX,
+			device = _bootstrapDevice.Device.NativePointer,
+			reserved = IntPtr.Zero,
+			apiVersion = NvencNative.NVENCAPI_VERSION
+		};
+
+		var openParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS>());
+		try
+		{
+			Marshal.StructureToPtr(openParams, openParamsPtr, false);
+			_openSessionRc = openSession(openParamsPtr, out _encoderSession);
+		}
+		finally
+		{
+			Marshal.FreeHGlobal(openParamsPtr);
+		}
+
+		if (_openSessionRc != 0)
+		{
+			var rcName = NvencNative.ResultToString(_openSessionRc);
+			_status = $"open_session_failed:{rcName}";
+			throw new NotSupportedException($"NVENC open session failed: {rcName}");
+		}
+
+		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -273,7 +311,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};openSessionRc={NvencNative.ResultToString(_openSessionRc)};encoderSession=0x{_encoderSession.ToInt64():X};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X}";
 	}
 
 	public void Stop()
@@ -317,11 +355,15 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_functionPointerCount = 0;
 		_openSessionPtr = IntPtr.Zero;
 		_openSession = null;
+		_openSessionRc = 0;
+		_encoderSession = IntPtr.Zero;
 		_getEncodeGuidCountPtr = IntPtr.Zero;
 		_getEncodeProfileGuidCountPtr = IntPtr.Zero;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
+		_bootstrapDevice?.Dispose();
+		_bootstrapDevice = null;
 	}
 
 	private static string FormatVersionWords(uint version)
