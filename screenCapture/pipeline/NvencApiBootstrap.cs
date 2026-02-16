@@ -2,6 +2,29 @@ using System.Runtime.InteropServices;
 
 internal static class NvencApiBootstrap
 {
+	public static bool TryBindDelegate<T>(IntPtr ptr, out T? del, out string message) where T : Delegate
+	{
+		del = null;
+		message = "unknown";
+		if (ptr == IntPtr.Zero)
+		{
+			message = "function pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<T>(ptr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
+
 	public static bool TryReadOpenSessionPointer(
 		IntPtr functionListBuffer,
 		out IntPtr openSessionPtr,

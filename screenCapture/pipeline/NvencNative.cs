@@ -55,6 +55,36 @@ internal static class NvencNative
 		uint guidArraySize,
 		out uint guidCount);
 
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncCreateBitstreamBufferDelegate(IntPtr encoderSession, IntPtr createBitstreamBufferParams);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncDestroyBitstreamBufferDelegate(IntPtr encoderSession, IntPtr bitstreamBuffer);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncEncodePictureDelegate(IntPtr encoderSession, IntPtr picParams);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncLockBitstreamDelegate(IntPtr encoderSession, IntPtr lockBitstreamParams);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncUnlockBitstreamDelegate(IntPtr encoderSession, IntPtr bitstreamBuffer);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncRegisterResourceDelegate(IntPtr encoderSession, IntPtr registerResourceParams);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncUnregisterResourceDelegate(IntPtr encoderSession, IntPtr registeredResource);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncMapInputResourceDelegate(IntPtr encoderSession, IntPtr mapInputResourceParams);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncUnmapInputResourceDelegate(IntPtr encoderSession, IntPtr mappedInputBuffer);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncDestroyEncoderDelegate(IntPtr encoderSession);
+
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	public delegate int CuInitDelegate(uint flags);
 
