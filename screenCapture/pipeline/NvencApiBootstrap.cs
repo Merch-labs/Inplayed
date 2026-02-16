@@ -161,4 +161,30 @@ internal static class NvencApiBootstrap
 			return false;
 		}
 	}
+
+	public static bool TryBindInitializeEncoderDelegate(
+		IntPtr ptr,
+		out NvencNative.NvEncInitializeEncoderDelegate? del,
+		out string message)
+	{
+		del = null;
+		message = "unknown";
+		if (ptr == IntPtr.Zero)
+		{
+			message = "initializeEncoder pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncInitializeEncoderDelegate>(ptr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }

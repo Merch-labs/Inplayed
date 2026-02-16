@@ -41,6 +41,9 @@ internal static class NvencNative
 		uint guidArraySize,
 		out uint guidCount);
 
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncInitializeEncoderDelegate(IntPtr encoderSession, IntPtr createEncodeParams);
+
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	public delegate int CuInitDelegate(uint flags);
 
