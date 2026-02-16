@@ -187,4 +187,56 @@ internal static class NvencApiBootstrap
 			return false;
 		}
 	}
+
+	public static bool TryBindGetEncodePresetCountDelegate(
+		IntPtr ptr,
+		out NvencNative.NvEncGetEncodePresetCountDelegate? del,
+		out string message)
+	{
+		del = null;
+		message = "unknown";
+		if (ptr == IntPtr.Zero)
+		{
+			message = "getEncodePresetCount pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncGetEncodePresetCountDelegate>(ptr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
+
+	public static bool TryBindGetEncodePresetGuidsDelegate(
+		IntPtr ptr,
+		out NvencNative.NvEncGetEncodePresetGUIDsDelegate? del,
+		out string message)
+	{
+		del = null;
+		message = "unknown";
+		if (ptr == IntPtr.Zero)
+		{
+			message = "getEncodePresetGUIDs pointer is zero";
+			return false;
+		}
+
+		try
+		{
+			del = Marshal.GetDelegateForFunctionPointer<NvencNative.NvEncGetEncodePresetGUIDsDelegate>(ptr);
+			message = "ok";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = $"bind_failed:{ex.GetType().Name}";
+			return false;
+		}
+	}
 }

@@ -141,11 +141,15 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private IntPtr _getEncodeProfileGuidCountPtr;
 	private IntPtr _getEncodeGuidsPtr;
 	private IntPtr _getEncodeProfileGuidsPtr;
+	private IntPtr _getEncodePresetCountPtr;
+	private IntPtr _getEncodePresetGuidsPtr;
 	private IntPtr _initializeEncoderPtr;
 	private NvencNative.NvEncGetEncodeGuidCountDelegate? _getEncodeGuidCount;
 	private NvencNative.NvEncGetEncodeGUIDsDelegate? _getEncodeGuids;
 	private NvencNative.NvEncGetEncodeProfileGuidCountDelegate? _getEncodeProfileGuidCount;
 	private NvencNative.NvEncGetEncodeProfileGUIDsDelegate? _getEncodeProfileGuids;
+	private NvencNative.NvEncGetEncodePresetCountDelegate? _getEncodePresetCount;
+	private NvencNative.NvEncGetEncodePresetGUIDsDelegate? _getEncodePresetGuids;
 	private NvencNative.NvEncInitializeEncoderDelegate? _initializeEncoder;
 	private int _getEncodeGuidCountRc;
 	private uint _encodeGuidCount;
@@ -154,10 +158,14 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private int _getEncodeProfileGuidCountHevcRc;
 	private uint _h264ProfileGuidCount;
 	private uint _hevcProfileGuidCount;
+	private int _getEncodePresetCountRc;
+	private int _getEncodePresetGuidsRc;
+	private uint _presetGuidCount;
 	private bool _supportsH264;
 	private bool _supportsHevc;
 	private Guid _selectedCodecGuid;
 	private string _selectedCodecName = "unknown";
+	private Guid _selectedPresetGuid;
 
 	public void Start(RecordingSettings settings)
 	{
@@ -283,6 +291,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_getEncodeProfileGuidCountPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 2);
 		_getEncodeGuidsPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 3);
 		_getEncodeProfileGuidsPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 4);
+		_getEncodePresetCountPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 8);
+		_getEncodePresetGuidsPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 9);
 		_initializeEncoderPtr = NvencFunctionListInspector.ReadPointerAtSlot(_functionListBuffer, 12);
 
 		if (!NvencApiBootstrap.TryBindOpenSessionDelegate(_openSessionPtr, out _openSession, out openPtrMsg))
@@ -321,6 +331,14 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_ = NvencApiBootstrap.TryBindGetEncodeProfileGuidsDelegate(
 			_getEncodeProfileGuidsPtr,
 			out _getEncodeProfileGuids,
+			out _);
+		_ = NvencApiBootstrap.TryBindGetEncodePresetCountDelegate(
+			_getEncodePresetCountPtr,
+			out _getEncodePresetCount,
+			out _);
+		_ = NvencApiBootstrap.TryBindGetEncodePresetGuidsDelegate(
+			_getEncodePresetGuidsPtr,
+			out _getEncodePresetGuids,
 			out _);
 
 		if (!NvencApiBootstrap.TryBindInitializeEncoderDelegate(
@@ -462,7 +480,28 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			throw new NotSupportedException("NVENC reported no supported H.264/HEVC codec GUID.");
 		}
 
-		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_initBound={(_initializeEncoder != null ? 1 : 0)}_but_not_implemented";
+		var getPresetCount = _getEncodePresetCount;
+		var getPresetGuids = _getEncodePresetGuids;
+		if (getPresetCount != null && getPresetGuids != null)
+		{
+			_getEncodePresetCountRc = QueryPresetGuidCount(
+				_encoderSession,
+				getPresetCount,
+				_selectedCodecGuid,
+				out _presetGuidCount);
+
+			if (_getEncodePresetCountRc == 0 && _presetGuidCount > 0)
+			{
+				_getEncodePresetGuidsRc = QueryPresetGuids(
+					_encoderSession,
+					getPresetGuids,
+					_selectedCodecGuid,
+					_presetGuidCount,
+					out _selectedPresetGuid);
+			}
+		}
+
+		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_presetCount={_presetGuidCount}_selectedPresetGuid={_selectedPresetGuid}_initBound={(_initializeEncoder != null ? 1 : 0)}_but_not_implemented";
 		throw new NotImplementedException(
 			"NVENC runtime detected, but native session creation/encode path is not implemented yet.");
 	}
@@ -488,7 +527,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public string GetDebugStatus()
 	{
-		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};openSessionRc={NvencNative.ResultToString(_openSessionRc)};encoderSession=0x{_encoderSession.ToInt64():X};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeGuidCountBound={(_getEncodeGuidCount != null ? 1 : 0)};getEncodeGuidCountRc={NvencNative.ResultToString(_getEncodeGuidCountRc)};getEncodeGuidsPtr=0x{_getEncodeGuidsPtr.ToInt64():X};getEncodeGuidsBound={(_getEncodeGuids != null ? 1 : 0)};getEncodeGuidsRc={NvencNative.ResultToString(_getEncodeGuidsRc)};codecCount={_encodeGuidCount};supportsH264={_supportsH264};supportsHevc={_supportsHevc};selectedCodec={_selectedCodecName};selectedCodecGuid={_selectedCodecGuid};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountBound={(_getEncodeProfileGuidCount != null ? 1 : 0)};getEncodeProfileGuidsPtr=0x{_getEncodeProfileGuidsPtr.ToInt64():X};getEncodeProfileGuidsBound={(_getEncodeProfileGuids != null ? 1 : 0)};initializeEncoderPtr=0x{_initializeEncoderPtr.ToInt64():X};initializeEncoderBound={(_initializeEncoder != null ? 1 : 0)};h264ProfileCount={_h264ProfileGuidCount};h264ProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountH264Rc)};hevcProfileCount={_hevcProfileGuidCount};hevcProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountHevcRc)}";
+		return $"{_status};maxVersion=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)});cudaDriver={FormatCudaDriverVersion(_cudaDriverVersion)};fnListVersion=0x{_functionListVersion:X8};createInstanceRc={NvencNative.ResultToString(_createInstanceRc)};fnPtrCount={_functionPointerCount};openSessionPtr=0x{_openSessionPtr.ToInt64():X};openSessionBound={(_openSession != null ? 1 : 0)};openSessionRc={NvencNative.ResultToString(_openSessionRc)};encoderSession=0x{_encoderSession.ToInt64():X};getEncodeGuidCountPtr=0x{_getEncodeGuidCountPtr.ToInt64():X};getEncodeGuidCountBound={(_getEncodeGuidCount != null ? 1 : 0)};getEncodeGuidCountRc={NvencNative.ResultToString(_getEncodeGuidCountRc)};getEncodeGuidsPtr=0x{_getEncodeGuidsPtr.ToInt64():X};getEncodeGuidsBound={(_getEncodeGuids != null ? 1 : 0)};getEncodeGuidsRc={NvencNative.ResultToString(_getEncodeGuidsRc)};codecCount={_encodeGuidCount};supportsH264={_supportsH264};supportsHevc={_supportsHevc};selectedCodec={_selectedCodecName};selectedCodecGuid={_selectedCodecGuid};getEncodeProfileGuidCountPtr=0x{_getEncodeProfileGuidCountPtr.ToInt64():X};getEncodeProfileGuidCountBound={(_getEncodeProfileGuidCount != null ? 1 : 0)};getEncodeProfileGuidsPtr=0x{_getEncodeProfileGuidsPtr.ToInt64():X};getEncodeProfileGuidsBound={(_getEncodeProfileGuids != null ? 1 : 0)};getEncodePresetCountPtr=0x{_getEncodePresetCountPtr.ToInt64():X};getEncodePresetCountBound={(_getEncodePresetCount != null ? 1 : 0)};getEncodePresetCountRc={NvencNative.ResultToString(_getEncodePresetCountRc)};getEncodePresetGuidsPtr=0x{_getEncodePresetGuidsPtr.ToInt64():X};getEncodePresetGuidsBound={(_getEncodePresetGuids != null ? 1 : 0)};getEncodePresetGuidsRc={NvencNative.ResultToString(_getEncodePresetGuidsRc)};presetCount={_presetGuidCount};selectedPresetGuid={_selectedPresetGuid};initializeEncoderPtr=0x{_initializeEncoderPtr.ToInt64():X};initializeEncoderBound={(_initializeEncoder != null ? 1 : 0)};h264ProfileCount={_h264ProfileGuidCount};h264ProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountH264Rc)};hevcProfileCount={_hevcProfileGuidCount};hevcProfileCountRc={NvencNative.ResultToString(_getEncodeProfileGuidCountHevcRc)}";
 	}
 
 	public void Stop()
@@ -538,23 +577,31 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_getEncodeProfileGuidCountPtr = IntPtr.Zero;
 		_getEncodeGuidsPtr = IntPtr.Zero;
 		_getEncodeProfileGuidsPtr = IntPtr.Zero;
+		_getEncodePresetCountPtr = IntPtr.Zero;
+		_getEncodePresetGuidsPtr = IntPtr.Zero;
 		_initializeEncoderPtr = IntPtr.Zero;
 		_getEncodeGuidCount = null;
 		_getEncodeGuids = null;
 		_getEncodeProfileGuidCount = null;
 		_getEncodeProfileGuids = null;
+		_getEncodePresetCount = null;
+		_getEncodePresetGuids = null;
 		_initializeEncoder = null;
 		_getEncodeGuidCountRc = 0;
 		_getEncodeGuidsRc = 0;
 		_encodeGuidCount = 0;
 		_getEncodeProfileGuidCountH264Rc = 0;
 		_getEncodeProfileGuidCountHevcRc = 0;
+		_getEncodePresetCountRc = 0;
+		_getEncodePresetGuidsRc = 0;
 		_h264ProfileGuidCount = 0;
 		_hevcProfileGuidCount = 0;
+		_presetGuidCount = 0;
 		_supportsH264 = false;
 		_supportsHevc = false;
 		_selectedCodecGuid = Guid.Empty;
 		_selectedCodecName = "unknown";
+		_selectedPresetGuid = Guid.Empty;
 		_maxSupportedVersion = 0;
 		_cudaDriverVersion = 0;
 		_createInstanceRc = 0;
@@ -597,6 +644,59 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		finally
 		{
 			Marshal.FreeHGlobal(codecPtr);
+		}
+	}
+
+	private static int QueryPresetGuidCount(
+		IntPtr encoderSession,
+		NvencNative.NvEncGetEncodePresetCountDelegate getPresetCount,
+		Guid codecGuid,
+		out uint presetCount)
+	{
+		presetCount = 0;
+		var codecPtr = Marshal.AllocHGlobal(Marshal.SizeOf<Guid>());
+		try
+		{
+			Marshal.StructureToPtr(codecGuid, codecPtr, false);
+			return getPresetCount(encoderSession, codecPtr, out presetCount);
+		}
+		finally
+		{
+			Marshal.FreeHGlobal(codecPtr);
+		}
+	}
+
+	private static int QueryPresetGuids(
+		IntPtr encoderSession,
+		NvencNative.NvEncGetEncodePresetGUIDsDelegate getPresetGuids,
+		Guid codecGuid,
+		uint presetCount,
+		out Guid selectedPresetGuid)
+	{
+		selectedPresetGuid = Guid.Empty;
+		var codecPtr = Marshal.AllocHGlobal(Marshal.SizeOf<Guid>());
+		var guidSize = Marshal.SizeOf<Guid>();
+		var presetGuidBuffer = Marshal.AllocHGlobal((int)(presetCount * (uint)guidSize));
+		try
+		{
+			Marshal.StructureToPtr(codecGuid, codecPtr, false);
+			var rc = getPresetGuids(encoderSession, codecPtr, presetGuidBuffer, presetCount, out var copied);
+			if (rc != 0)
+			{
+				return rc;
+			}
+
+			if (copied > 0)
+			{
+				selectedPresetGuid = Marshal.PtrToStructure<Guid>(presetGuidBuffer);
+			}
+
+			return rc;
+		}
+		finally
+		{
+			Marshal.FreeHGlobal(codecPtr);
+			Marshal.FreeHGlobal(presetGuidBuffer);
 		}
 	}
 }

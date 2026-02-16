@@ -44,6 +44,17 @@ internal static class NvencNative
 	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
 	public delegate int NvEncInitializeEncoderDelegate(IntPtr encoderSession, IntPtr createEncodeParams);
 
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncGetEncodePresetCountDelegate(IntPtr encoderSession, IntPtr encodeGuid, out uint presetCount);
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	public delegate int NvEncGetEncodePresetGUIDsDelegate(
+		IntPtr encoderSession,
+		IntPtr encodeGuid,
+		IntPtr presetGuids,
+		uint guidArraySize,
+		out uint guidCount);
+
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	public delegate int CuInitDelegate(uint flags);
 
