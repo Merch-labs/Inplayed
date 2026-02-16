@@ -209,6 +209,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	private int _unlockBitstreamFailures;
 	private long _encodedPacketCount;
 	private long _encodedPacketBytes;
+	private bool _running;
 	private int _getEncodeGuidCountRc;
 	private uint _encodeGuidCount;
 	private int _getEncodeGuidsRc;
@@ -757,13 +758,14 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 		InitializeBitstreamBufferPool();
 		_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
+		_running = true;
 
 		_status = $"open_session_ok_fnptrs={_functionPointerCount}_cuda={FormatCudaDriverVersion(_cudaDriverVersion)}_maxver=0x{_maxSupportedVersion:X8}({FormatVersionWords(_maxSupportedVersion)})_fnlist=0x{_functionListVersion:X8}_session=0x{_encoderSession.ToInt64():X}_codecCount={_encodeGuidCount}_h264={_supportsH264}_hevc={_supportsHevc}_h264Profiles={_h264ProfileGuidCount}_hevcProfiles={_hevcProfileGuidCount}_selectedCodec={_selectedCodecName}_selectedProfileGuid={_selectedProfileGuid}_presetCount={_presetGuidCount}_selectedPresetGuid={_selectedPresetGuid}_initBound={(_initializeEncoder != null ? 1 : 0)}_initRc={NvencNative.ResultToString(_initializeEncoderRc)}_bitstreamBuffers={_bitstreamBuffers.Length}_coreEncodeApiBound={(_createBitstreamBuffer != null && _destroyBitstreamBuffer != null && _encodePicture != null && _lockBitstream != null && _unlockBitstream != null && _mapInputResource != null && _unmapInputResource != null && _registerResource != null && _unregisterResource != null && _destroyEncoder != null ? 1 : 0)}_started";
 	}
 
 	public void Encode(TextureFrameRef frame)
 	{
-		if (_encoderSession == IntPtr.Zero)
+		if (!_running || _encoderSession == IntPtr.Zero)
 		{
 			return;
 		}
@@ -864,6 +866,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 	{
 		_ = width;
 		_ = height;
+		_status = "reconfigure_requested_not_implemented";
 	}
 
 	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
@@ -884,13 +887,21 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	public void Stop()
 	{
+		if (!_running)
+		{
+			return;
+		}
+
+		_running = false;
+		DestroyBitstreamBuffers();
+		UnregisterAllResources();
+		DestroyEncoderSession();
+		_status = "stopped";
 	}
 
 	public void Dispose()
 	{
-		DestroyBitstreamBuffers();
-		UnregisterAllResources();
-		DestroyEncoderSession();
+		Stop();
 
 		if (_nvencLib != IntPtr.Zero)
 		{
@@ -1005,6 +1016,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		_encodedPacketCount = 0;
 		_encodedPacketBytes = 0;
 		_ringBuffer = null;
+		_running = false;
 		_bootstrapDevice?.Dispose();
 		_bootstrapDevice = null;
 	}
@@ -1142,10 +1154,11 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		var lockParams = new NvencNative.NV_ENC_LOCK_BITSTREAM
 		{
 			version = NvencNative.EncodeStructVersion<NvencNative.NV_ENC_LOCK_BITSTREAM>(NvencNative.NV_ENC_LOCK_BITSTREAM_VER),
-			doNotWait = 0,
+			doNotWait = 1,
 			outputBitstream = bitstreamBuffer
 		};
 		var lockPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NvencNative.NV_ENC_LOCK_BITSTREAM>());
+		var lockSucceeded = false;
 		try
 		{
 			Marshal.StructureToPtr(lockParams, lockPtr, false);
@@ -1155,6 +1168,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 				_lockBitstreamFailures++;
 				return;
 			}
+			lockSucceeded = true;
 
 			var locked = Marshal.PtrToStructure<NvencNative.NV_ENC_LOCK_BITSTREAM>(lockPtr);
 			if (locked.bitstreamBufferPtr == IntPtr.Zero || locked.bitstreamSizeInBytes == 0)
@@ -1178,10 +1192,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		finally
 		{
 			Marshal.FreeHGlobal(lockPtr);
-			var unlockRc = unlockBitstream(_encoderSession, bitstreamBuffer);
-			if (unlockRc != 0)
+			if (lockSucceeded)
 			{
-				_unlockBitstreamFailures++;
+				var unlockRc = unlockBitstream(_encoderSession, bitstreamBuffer);
+				if (unlockRc != 0)
+				{
+					_unlockBitstreamFailures++;
+				}
 			}
 		}
 	}
