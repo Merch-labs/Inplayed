@@ -42,45 +42,68 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 			TrimLocked(latestTimestampMs, _retention);
 
 			var minTimeMs = latestTimestampMs - (long)keep.TotalMilliseconds;
+			var windowStart = _packets.First;
+			while (windowStart != null && windowStart.Value.TimestampMs < minTimeMs)
+			{
+				windowStart = windowStart.Next;
+			}
+
+			if (windowStart == null)
+			{
+				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
+			}
+
+			var start = FindKeyframeStart(windowStart);
 			var list = new List<EncodedPacket>(_packets.Count);
-			for (var node = _packets.First; node != null; node = node.Next)
+			for (var node = start; node != null; node = node.Next)
 			{
-				if (node.Value.TimestampMs >= minTimeMs)
-				{
-					list.Add(node.Value.Packet);
-				}
-			}
-
-			var keyframeIndex = 0;
-			for (var i = 0; i < list.Count; i++)
-			{
-				if (list[i].IsKeyFrame)
-				{
-					keyframeIndex = i;
-					break;
-				}
-			}
-
-			if (keyframeIndex > 0)
-			{
-				var start = keyframeIndex;
-				for (var i = keyframeIndex - 1; i >= 0; i--)
-				{
-					var nalType = GetNalType(list[i].Data.Span);
-					if (nalType == 7 || nalType == 8 || nalType == 6 || nalType == 9)
-					{
-						start = i;
-						continue;
-					}
-
-					break;
-				}
-
-				list = list.Skip(start).ToList();
+				list.Add(node.Value.Packet);
 			}
 
 			return new EncodedPacketSnapshot(list);
 		}
+	}
+
+	private LinkedListNode<BufferedPacket> FindKeyframeStart(LinkedListNode<BufferedPacket> windowStart)
+	{
+		LinkedListNode<BufferedPacket>? start = null;
+
+		for (var node = windowStart; node != null; node = node.Previous)
+		{
+			if (node.Value.Packet.IsKeyFrame)
+			{
+				start = node;
+				break;
+			}
+		}
+
+		if (start == null)
+		{
+			for (var node = windowStart; node != null; node = node.Next)
+			{
+				if (node.Value.Packet.IsKeyFrame)
+				{
+					start = node;
+					break;
+				}
+			}
+		}
+
+		start ??= windowStart;
+
+		for (var node = start.Previous; node != null; node = node.Previous)
+		{
+			var nalType = GetNalType(node.Value.Packet.Data.Span);
+			if (nalType == 7 || nalType == 8 || nalType == 6 || nalType == 9)
+			{
+				start = node;
+				continue;
+			}
+
+			break;
+		}
+
+		return start;
 	}
 
 	public (int packetCount, long totalBytes) GetStats()
