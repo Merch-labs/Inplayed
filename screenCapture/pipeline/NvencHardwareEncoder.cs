@@ -1363,7 +1363,15 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			var lockRc = lockBitstream(_encoderSession, _lockParamsPtr);
 			if (lockRc != 0)
 			{
-				_lockBitstreamBusyCount++;
+				if (doNotWait)
+				{
+					_lockBitstreamBusyCount++;
+				}
+				else
+				{
+					_lockBitstreamFailures++;
+				}
+
 				return false;
 			}
 			lockSucceeded = true;
@@ -1378,7 +1386,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			var data = GC.AllocateUninitializedArray<byte>(size);
 			Marshal.Copy(locked.bitstreamBufferPtr, data, 0, size);
 
-			var isKeyFrame = locked.pictureType == 1;
+			var isKeyFrame = IsKeyFramePacket(data);
 			var ts = frameTimestamp > 0 ? frameTimestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 			_ringBuffer?.Append(new EncodedPacket(data, ts, ts, isKeyFrame));
 			_encodedPacketCount++;
@@ -1593,5 +1601,99 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		{
 			Marshal.FreeHGlobal(codecPtr);
 		}
+	}
+
+	private bool IsKeyFramePacket(ReadOnlySpan<byte> data)
+	{
+		if (data.Length < 5)
+		{
+			return false;
+		}
+
+		// H.264: IDR(5), SPS(7), PPS(8)
+		if (_selectedCodecGuid == NvencNative.NV_ENC_CODEC_H264_GUID)
+		{
+			return ContainsH264KeyNal(data);
+		}
+
+		// HEVC: IDR_W_RADL(19), IDR_N_LP(20), CRA(21), VPS/SPS/PPS(32/33/34)
+		if (_selectedCodecGuid == NvencNative.NV_ENC_CODEC_HEVC_GUID)
+		{
+			return ContainsHevcKeyNal(data);
+		}
+
+		return false;
+	}
+
+	private static bool ContainsH264KeyNal(ReadOnlySpan<byte> data)
+	{
+		var i = 0;
+		while (TryFindAnnexBStartCode(data, i, out var nalOffset, out var nalHeader))
+		{
+			var nalType = nalHeader & 0x1F;
+			if (nalType == 5 || nalType == 7 || nalType == 8)
+			{
+				return true;
+			}
+
+			i = nalOffset + 1;
+		}
+
+		return false;
+	}
+
+	private static bool ContainsHevcKeyNal(ReadOnlySpan<byte> data)
+	{
+		var i = 0;
+		while (TryFindAnnexBStartCode(data, i, out var nalOffset, out var nalHeader))
+		{
+			var nalType = (nalHeader >> 1) & 0x3F;
+			if (nalType == 19 || nalType == 20 || nalType == 21 || nalType == 32 || nalType == 33 || nalType == 34)
+			{
+				return true;
+			}
+
+			i = nalOffset + 1;
+		}
+
+		return false;
+	}
+
+	private static bool TryFindAnnexBStartCode(ReadOnlySpan<byte> data, int start, out int nalOffset, out byte nalHeader)
+	{
+		nalOffset = -1;
+		nalHeader = 0;
+		for (var i = Math.Max(0, start); i <= data.Length - 4; i++)
+		{
+			if (data[i] != 0 || data[i + 1] != 0)
+			{
+				continue;
+			}
+
+			int headerIdx;
+			if (data[i + 2] == 1)
+			{
+				headerIdx = i + 3;
+			}
+			else if (i + 3 < data.Length && data[i + 2] == 0 && data[i + 3] == 1)
+			{
+				headerIdx = i + 4;
+			}
+			else
+			{
+				continue;
+			}
+
+			if (headerIdx >= data.Length)
+			{
+				return false;
+			}
+
+			nalOffset = headerIdx;
+			nalHeader = data[headerIdx];
+			return true;
+		}
+
+		return false;
 	}
 }
