@@ -17,10 +17,10 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private readonly IClipWriter _clipWriter = new FfmpegClipWriter();
 
 	private RecordingSettings? _settings;
-	private D3D11DeviceBundle? _device;
 	private ID3D11Texture2D? _staging;
 	private int _stagingWidth;
 	private int _stagingHeight;
+	private nint _stagingDevicePtr;
 	private int _inputWidth;
 	private int _inputHeight;
 	private bool _restartRequested;
@@ -41,6 +41,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private long _queueDrops;
 	private long _queuedBuffers;
 	private long _lastSubmittedFrameTs;
+	private long _gpuCopyFailures;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -59,7 +60,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_settings = settings;
 			_inputWidth = Math.Max(1, settings.Width);
 			_inputHeight = Math.Max(1, settings.Height);
-			_device = D3D11Helper.CreateDevice();
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
 			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
@@ -71,14 +71,29 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	{
 		lock (_gate)
 		{
-			if (!_running || _settings == null || _device == null || _stdin == null)
+			if (!_running || _settings == null || _stdin == null)
 			{
 				return;
 			}
 
-			EnsureStaging(frame.Width, frame.Height, frame.Texture);
+			using var sourceDevice = frame.Texture.Device;
+			if (sourceDevice == null)
+			{
+				Interlocked.Increment(ref _gpuCopyFailures);
+				return;
+			}
+
+			using var sourceContext = sourceDevice.ImmediateContext;
+			if (sourceContext == null)
+			{
+				Interlocked.Increment(ref _gpuCopyFailures);
+				return;
+			}
+
+			EnsureStaging(frame.Width, frame.Height, frame.Texture, sourceDevice);
 			if (_staging == null)
 			{
+				Interlocked.Increment(ref _gpuCopyFailures);
 				return;
 			}
 
@@ -96,8 +111,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				_restartRequested = false;
 			}
 
-			_device.Context.CopyResource(_staging, frame.Texture);
-			var dataBox = _device.Context.Map(_staging, 0, MapMode.Read, MapFlags.None);
+			sourceContext.CopyResource(_staging, frame.Texture);
+			var dataBox = sourceContext.Map(_staging, 0, MapMode.Read, MapFlags.None);
 			try
 			{
 				var width = frame.Width;
@@ -133,7 +148,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			}
 			finally
 			{
-				_device.Context.Unmap(_staging, 0);
+				sourceContext.Unmap(_staging, 0);
 			}
 		}
 	}
@@ -169,7 +184,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)}";
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)}";
 		}
 	}
 
@@ -195,8 +210,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		{
 			_staging?.Dispose();
 			_staging = null;
-			_device?.Dispose();
-			_device = null;
+			_stagingDevicePtr = 0;
 			_ffmpeg?.Dispose();
 			_ffmpeg = null;
 		}
@@ -427,14 +441,18 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	private void EnsureStaging(int width, int height, ID3D11Texture2D sourceTexture)
+	private void EnsureStaging(int width, int height, ID3D11Texture2D sourceTexture, ID3D11Device sourceDevice)
 	{
-		if (_staging != null && width == _stagingWidth && height == _stagingHeight)
+		if (_staging != null &&
+			width == _stagingWidth &&
+			height == _stagingHeight &&
+			_stagingDevicePtr == sourceDevice.NativePointer)
 		{
 			return;
 		}
 
 		_staging?.Dispose();
+		_staging = null;
 		var desc = sourceTexture.Description;
 		desc.Usage = ResourceUsage.Staging;
 		desc.BindFlags = BindFlags.None;
@@ -443,9 +461,10 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
 
-		_staging = _device!.Device.CreateTexture2D(desc);
+		_staging = sourceDevice.CreateTexture2D(desc);
 		_stagingWidth = width;
 		_stagingHeight = height;
+		_stagingDevicePtr = sourceDevice.NativePointer;
 	}
 
 	private static string ResolveFfmpegPath()

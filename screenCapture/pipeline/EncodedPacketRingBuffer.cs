@@ -53,11 +53,7 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
 			}
 
-			var start = FindKeyframeStart(windowStart);
-			if (start == null)
-			{
-				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
-			}
+			var start = FindKeyframeStart(windowStart) ?? windowStart;
 			var list = new List<EncodedPacket>(_packets.Count);
 			for (var node = start; node != null; node = node.Next)
 			{

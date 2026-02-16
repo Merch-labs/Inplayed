@@ -114,8 +114,15 @@ public sealed class CaptureManager : IDisposable
 			{
 				using (frame)
 				{
-					_encoder.Encode(frame);
-					Interlocked.Increment(ref _encodedFrames);
+					try
+					{
+						_encoder.Encode(frame);
+						Interlocked.Increment(ref _encodedFrames);
+					}
+					catch
+					{
+						Interlocked.Increment(ref _droppedFrames);
+					}
 				}
 			}
 		}
