@@ -642,8 +642,9 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 		else if (_supportsHevc)
 		{
-			_selectedCodecGuid = NvencNative.NV_ENC_CODEC_HEVC_GUID;
-			_selectedCodecName = "hevc";
+			// Current clip mux path is Annex-B H.264 only.
+			_selectedCodecGuid = Guid.Empty;
+			_selectedCodecName = "hevc_not_supported_yet";
 		}
 		else
 		{
@@ -653,8 +654,8 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 		if (_selectedCodecGuid == Guid.Empty)
 		{
-			_status = "no_supported_codec_guid";
-			throw new NotSupportedException("NVENC reported no supported H.264/HEVC codec GUID.");
+			_status = "no_supported_h264_codec_guid";
+			throw new NotSupportedException("NVENC requires H.264 support in the current pipeline.");
 		}
 
 		if (_getEncodeProfileGuids == null)
