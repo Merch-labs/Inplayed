@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 {
 	private readonly object _gate = new();
@@ -14,7 +16,7 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 
 	public void Append(EncodedPacket packet)
 	{
-		var data = packet.Data.ToArray();
+		var data = ToOwnedArray(packet.Data);
 		var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 		var packetTimeMs = packet.PresentationTimestamp > 0 ? packet.PresentationTimestamp : nowMs;
 		var node = new BufferedPacket(
@@ -111,6 +113,26 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 		}
 
 		return data[idx] & 0x1F;
+	}
+
+	private static byte[] ToOwnedArray(ReadOnlyMemory<byte> data)
+	{
+		if (MemoryMarshal.TryGetArray(data, out ArraySegment<byte> segment))
+		{
+			if (segment.Array != null)
+			{
+				if (segment.Offset == 0 && segment.Count == segment.Array.Length)
+				{
+					return segment.Array;
+				}
+
+				var copy = new byte[segment.Count];
+				Buffer.BlockCopy(segment.Array, segment.Offset, copy, 0, segment.Count);
+				return copy;
+			}
+		}
+
+		return data.ToArray();
 	}
 
 	private void TrimLocked(long nowMs, TimeSpan keep)
