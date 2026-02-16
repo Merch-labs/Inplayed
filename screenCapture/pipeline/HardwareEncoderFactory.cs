@@ -7,6 +7,10 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_STRICT_GPU"),
 			"1",
 			StringComparison.Ordinal);
+		var strictNativeNvencOnly = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_STRICT_NATIVE_NVENC"),
+			"1",
+			StringComparison.Ordinal);
 		var enableNativeNvenc = string.Equals(
 			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
 			"1",
@@ -15,7 +19,7 @@ public static class HardwareEncoderFactory
 		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false, false, false, false);
 		var hasNvencFfmpeg = FfmpegCapabilities.SupportsEncoder("h264_nvenc");
 
-		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
+		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};strictNativeNvenc={strictNativeNvencOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
 	}
 
 	public static IHardwareEncoder Create(RecordingSettings settings)
@@ -26,12 +30,37 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_STRICT_GPU"),
 			"1",
 			StringComparison.Ordinal);
+		var strictNativeNvencOnly = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_STRICT_NATIVE_NVENC"),
+			"1",
+			StringComparison.Ordinal);
 		var enableNativeNvenc = string.Equals(
 			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
 			"1",
 			StringComparison.Ordinal);
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
 		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false, false, false, false);
+
+		if (strictNativeNvencOnly)
+		{
+			if (!hasNvidiaAdapter)
+			{
+				throw new InvalidOperationException("Strict native NVENC mode enabled, but no NVIDIA adapter was detected.");
+			}
+
+			if (!enableNativeNvenc)
+			{
+				throw new InvalidOperationException("Strict native NVENC mode requires INPLAYED_EXPERIMENTAL_NVENC=1.");
+			}
+
+			if (!nvencReadiness.IsReady)
+			{
+				throw new InvalidOperationException($"Strict native NVENC mode enabled, but readiness check failed: {nvencReadiness.Summary}");
+			}
+
+			Console.WriteLine("Encoder forced: native NVENC (strict mode)");
+			return new NvencHardwareEncoder();
+		}
 
 		if (!string.IsNullOrWhiteSpace(forced))
 		{
@@ -40,11 +69,17 @@ public static class HardwareEncoderFactory
 			{
 				case "nvenc_native":
 					Console.WriteLine($"Native NVENC readiness: {nvencReadiness.Summary}");
-					return new AdaptiveHardwareEncoder(
-						() => new NvencHardwareEncoder(),
-						() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
-						() => new FfmpegPacketRingHardwareEncoder("libx264"),
-						() => new CpuReadbackHardwareEncoder("libx264"));
+					if (!enableNativeNvenc)
+					{
+						throw new InvalidOperationException("INPLAYED_ENCODER=nvenc_native requires INPLAYED_EXPERIMENTAL_NVENC=1.");
+					}
+
+					if (!nvencReadiness.IsReady)
+					{
+						throw new InvalidOperationException($"INPLAYED_ENCODER=nvenc_native requested, but readiness failed: {nvencReadiness.Summary}");
+					}
+
+					return new NvencHardwareEncoder();
 				case "nvenc_packet":
 					return new AdaptiveHardwareEncoder(
 						() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
