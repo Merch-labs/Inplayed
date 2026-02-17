@@ -118,15 +118,31 @@ internal static class NvencNative
 
 	public static bool IsApiCompatible(uint maxSupportedVersion, uint requestedApiVersion)
 	{
-		// Compare major.minor words packed by NVENC.
-		var maxHi = (maxSupportedVersion >> 16) & 0xFFFFu;
-		var maxLo = maxSupportedVersion & 0xFFFFu;
-		var reqHi = (requestedApiVersion >> 16) & 0xFFFFu;
-		var reqLo = requestedApiVersion & 0xFFFFu;
-		return maxHi > reqHi || (maxHi == reqHi && maxLo >= reqLo);
+		static uint Normalize(uint v)
+		{
+			if (v <= 0xFFFFu)
+			{
+				return v;
+			}
+
+			// Some code paths represent major version as 0x000B0000 style.
+			// Convert that to the compact 0xB0 style used by the runtime API query.
+			var hi = (v >> 16) & 0xFFFFu;
+			var lo = v & 0xFFFFu;
+			if (lo == 0 && hi > 0 && hi <= 0xFF)
+			{
+				return hi << 4;
+			}
+
+			return v;
+		}
+
+		var max = Normalize(maxSupportedVersion);
+		var req = Normalize(requestedApiVersion);
+		return max >= req;
 	}
 
-	public const uint NVENCAPI_VERSION = 0x000B0000;
+	public const uint NVENCAPI_VERSION = 0x000000D0;
 	public const uint NV_ENC_DEVICE_TYPE_DIRECTX = 1;
 	public const uint NV_ENC_INITIALIZE_PARAMS_VER = 1;
 	public const uint NV_ENC_CONFIG_VER = 1;

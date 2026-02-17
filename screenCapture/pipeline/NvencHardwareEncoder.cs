@@ -1193,6 +1193,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	private static string FormatVersionWords(uint version)
 	{
+		if (version <= 0xFFFF)
+		{
+			var major = (version >> 4) & 0xFF;
+			var minor = version & 0xF;
+			return $"{major}.{minor}";
+		}
+
 		var hi = (version >> 16) & 0xFFFF;
 		var lo = version & 0xFFFF;
 		return $"{hi}.{lo}";
