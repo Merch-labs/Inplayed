@@ -8,8 +8,8 @@ internal static class NvencFunctionList
 
 	public static IntPtr Allocate(uint maxSupportedVersion, out uint encodedVersion)
 	{
-		var apiStructVersion = SelectStructVersion(maxSupportedVersion);
-		encodedVersion = EncodeStructVersion((uint)FunctionListBufferBytes, apiStructVersion);
+		_ = maxSupportedVersion;
+		encodedVersion = EncodeFunctionListVersion();
 
 		var ptr = Marshal.AllocHGlobal(FunctionListBufferBytes);
 		for (var i = 0; i < FunctionListBufferBytes; i++)
@@ -62,19 +62,9 @@ internal static class NvencFunctionList
 		return count;
 	}
 
-	private static uint SelectStructVersion(uint maxSupportedVersion)
+	private static uint EncodeFunctionListVersion()
 	{
-		var reported = (maxSupportedVersion >> 16) & 0xFFFF;
-		if (reported == 0)
-		{
-			return 2;
-		}
-
-		return Math.Min(reported, 2u);
-	}
-
-	private static uint EncodeStructVersion(uint structSize, uint structVersion)
-	{
-		return (structSize & 0xFFFFu) | ((structVersion & 0xFFFFu) << 16) | (0x7u << 28);
+		const uint functionListStructVersion = 2;
+		return functionListStructVersion | (NvencNative.NVENCAPI_VERSION << 16) | (0x7u << 28);
 	}
 }
