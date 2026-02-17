@@ -21,6 +21,9 @@
   <Content Include="ui\**\*">
     <CopyToOutputDirectory>Always</CopyToOutputDirectory>
   </Content>
+  <Content Include="inplayed.config.json">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </Content>
   </ItemGroup>
 
 </Project>

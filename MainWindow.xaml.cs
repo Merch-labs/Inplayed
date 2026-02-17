@@ -183,6 +183,7 @@ public class Backend
 
 	private static RecordingSettings CreateDefaultSettings()
 	{
+		var appConfig = AppConfig.Load();
 		var monitorIndex = ActiveTargetResolver.GetActiveMonitorIndex();
 		var screens = Screen.AllScreens;
 		var screen = (monitorIndex >= 0 && monitorIndex < screens.Length) ? screens[monitorIndex] : Screen.PrimaryScreen;
@@ -195,6 +196,7 @@ public class Backend
 			Fps = 60,
 			Bitrate = 12_000_000,
 			ClipSeconds = 20,
+			UseNativeNvenc = appConfig.NativeNvencEnabled,
 			Target = new MonitorTarget { MonitorIndex = monitorIndex }
 		};
 	}

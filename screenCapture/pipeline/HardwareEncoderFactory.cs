@@ -1,6 +1,6 @@
 public static class HardwareEncoderFactory
 {
-	public static string GetSelectionDebug()
+	public static string GetSelectionDebug(RecordingSettings? settings = null)
 	{
 		var forced = Environment.GetEnvironmentVariable("INPLAYED_ENCODER")?.Trim().ToLowerInvariant();
 		var strictGpuOnly = string.Equals(
@@ -15,12 +15,13 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_DISABLE_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
-		var enableNativeNvenc = !disableNativeNvenc;
+		var settingNativeNvenc = settings?.UseNativeNvenc;
+		var enableNativeNvenc = settingNativeNvenc ?? !disableNativeNvenc;
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
 		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled_by_env", 0, 0, 0, false, false, false, false);
 		var hasNvencFfmpeg = FfmpegCapabilities.SupportsEncoder("h264_nvenc");
 
-		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};strictNativeNvenc={strictNativeNvencOnly};nativeNvencEnabled={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
+		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};strictNativeNvenc={strictNativeNvencOnly};settingNativeNvenc={(settingNativeNvenc.HasValue ? (settingNativeNvenc.Value ? "1" : "0") : "null")};nativeNvencEnabled={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
 	}
 
 	public static IHardwareEncoder Create(RecordingSettings settings)
@@ -39,7 +40,8 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_DISABLE_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
-		var enableNativeNvenc = !disableNativeNvenc;
+		var settingNativeNvenc = settings.UseNativeNvenc;
+		var enableNativeNvenc = settingNativeNvenc ?? !disableNativeNvenc;
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
 		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled_by_env", 0, 0, 0, false, false, false, false);
 
