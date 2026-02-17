@@ -2,6 +2,12 @@ using System.Runtime.InteropServices;
 
 internal static class NvencApiBootstrap
 {
+	private static bool IsLikelyCodePointer(IntPtr ptr)
+	{
+		var value = ptr.ToInt64();
+		return value > 0x10000;
+	}
+
 	public static bool TryBindDelegate<T>(IntPtr ptr, out T? del, out string message) where T : Delegate
 	{
 		del = null;
@@ -9,6 +15,11 @@ internal static class NvencApiBootstrap
 		if (ptr == IntPtr.Zero)
 		{
 			message = "function pointer is zero";
+			return false;
+		}
+		if (!IsLikelyCodePointer(ptr))
+		{
+			message = $"function pointer is invalid:0x{ptr.ToInt64():X}";
 			return false;
 		}
 
@@ -39,7 +50,7 @@ internal static class NvencApiBootstrap
 		}
 
 		var pointerSize = IntPtr.Size;
-		var offset = sizeof(uint); // skip version field
+		var offset = sizeof(uint) * 2; // skip version + reserved
 		openSessionPtr = pointerSize == 8
 			? new IntPtr(Marshal.ReadInt64(functionListBuffer, offset))
 			: new IntPtr(Marshal.ReadInt32(functionListBuffer, offset));
@@ -64,6 +75,11 @@ internal static class NvencApiBootstrap
 		if (openSessionPtr == IntPtr.Zero)
 		{
 			message = "openSession pointer is zero";
+			return false;
+		}
+		if (!IsLikelyCodePointer(openSessionPtr))
+		{
+			message = $"openSession pointer invalid:0x{openSessionPtr.ToInt64():X}";
 			return false;
 		}
 

@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 
 internal static class NvencFunctionListInspector
 {
+	private const int FunctionListHeaderBytes = sizeof(uint) * 2;
+
 	public readonly record struct RequiredSlotsState(
 		bool HasOpenSession,
 		bool HasGetEncodeGuidCount,
@@ -29,7 +31,7 @@ internal static class NvencFunctionListInspector
 		}
 
 		var pointerSize = IntPtr.Size;
-		var offset = sizeof(uint) + (slot * pointerSize);
+		var offset = FunctionListHeaderBytes + (slot * pointerSize);
 		return pointerSize == 8
 			? new IntPtr(Marshal.ReadInt64(functionListBuffer, offset))
 			: new IntPtr(Marshal.ReadInt32(functionListBuffer, offset));

@@ -39,7 +39,7 @@ internal static class NvencFunctionList
 			return 0;
 		}
 
-		var headerBytes = sizeof(uint);
+		var headerBytes = sizeof(uint) * 2;
 		var pointerSize = IntPtr.Size;
 		var count = 0;
 		for (var i = 0; i < maxSlots; i++)
