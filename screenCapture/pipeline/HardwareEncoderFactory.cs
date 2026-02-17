@@ -11,15 +11,16 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_STRICT_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
-		var enableNativeNvenc = string.Equals(
-			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
+		var disableNativeNvenc = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_DISABLE_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
+		var enableNativeNvenc = !disableNativeNvenc;
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
-		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false, false, false, false);
+		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled_by_env", 0, 0, 0, false, false, false, false);
 		var hasNvencFfmpeg = FfmpegCapabilities.SupportsEncoder("h264_nvenc");
 
-		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};strictNativeNvenc={strictNativeNvencOnly};expNvenc={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
+		return $"forced={forced ?? "auto"};strictGpu={strictGpuOnly};strictNativeNvenc={strictNativeNvencOnly};nativeNvencEnabled={enableNativeNvenc};nvidia={hasNvidiaAdapter};ffmpegNvenc={hasNvencFfmpeg};nativeNvenc={nvencReadiness.Summary};nativeFnPtrs={nvencReadiness.FunctionPointerCount};nativeRequiredSlots={nvencReadiness.RequiredSlotsPresent};nativeOpenSessionBindable={nvencReadiness.OpenSessionBindable};nativeInitializeEncoderBindable={nvencReadiness.InitializeEncoderBindable};nativePresetApiBindable={nvencReadiness.PresetApiBindable}";
 	}
 
 	public static IHardwareEncoder Create(RecordingSettings settings)
@@ -34,23 +35,19 @@ public static class HardwareEncoderFactory
 			Environment.GetEnvironmentVariable("INPLAYED_STRICT_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
-		var enableNativeNvenc = string.Equals(
-			Environment.GetEnvironmentVariable("INPLAYED_EXPERIMENTAL_NVENC"),
+		var disableNativeNvenc = string.Equals(
+			Environment.GetEnvironmentVariable("INPLAYED_DISABLE_NATIVE_NVENC"),
 			"1",
 			StringComparison.Ordinal);
+		var enableNativeNvenc = !disableNativeNvenc;
 		var hasNvidiaAdapter = GpuCapabilityProbe.IsNvidiaAdapterPresent();
-		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled", 0, 0, 0, false, false, false, false);
+		var nvencReadiness = enableNativeNvenc ? NvencHardwareEncoder.ProbeReadiness() : new NvencReadiness(false, "disabled_by_env", 0, 0, 0, false, false, false, false);
 
 		if (strictNativeNvencOnly)
 		{
 			if (!hasNvidiaAdapter)
 			{
 				throw new InvalidOperationException("Strict native NVENC mode enabled, but no NVIDIA adapter was detected.");
-			}
-
-			if (!enableNativeNvenc)
-			{
-				throw new InvalidOperationException("Strict native NVENC mode requires INPLAYED_EXPERIMENTAL_NVENC=1.");
 			}
 
 			if (!nvencReadiness.IsReady)
@@ -69,11 +66,6 @@ public static class HardwareEncoderFactory
 			{
 				case "nvenc_native":
 					Console.WriteLine($"Native NVENC readiness: {nvencReadiness.Summary}");
-					if (!enableNativeNvenc)
-					{
-						throw new InvalidOperationException("INPLAYED_ENCODER=nvenc_native requires INPLAYED_EXPERIMENTAL_NVENC=1.");
-					}
-
 					if (!nvencReadiness.IsReady)
 					{
 						throw new InvalidOperationException($"INPLAYED_ENCODER=nvenc_native requested, but readiness failed: {nvencReadiness.Summary}");
@@ -97,24 +89,21 @@ public static class HardwareEncoderFactory
 			}
 		}
 
+		if (hasNvidiaAdapter && enableNativeNvenc && nvencReadiness.IsReady)
+		{
+			Console.WriteLine("Encoder preferred: native NVENC");
+			return new AdaptiveHardwareEncoder(
+				() => new NvencHardwareEncoder(),
+				() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
+				() => new FfmpegPacketRingHardwareEncoder("libx264"));
+		}
+
 		if (hasNvidiaAdapter && FfmpegCapabilities.SupportsEncoder("h264_nvenc"))
 		{
 			Console.WriteLine("Encoder preferred: h264_nvenc (ffmpeg packet ring)");
 			if (enableNativeNvenc)
 			{
-				Console.WriteLine("Native NVENC experimental path enabled");
-				if (nvencReadiness.IsReady)
-				{
-					return new AdaptiveHardwareEncoder(
-						() => new NvencHardwareEncoder(),
-						() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
-						() => new FfmpegPacketRingHardwareEncoder("libx264"));
-				}
-
 				Console.WriteLine($"Native NVENC skipped: {nvencReadiness.Summary}");
-				return new AdaptiveHardwareEncoder(
-					() => new FfmpegPacketRingHardwareEncoder("h264_nvenc"),
-					() => new FfmpegPacketRingHardwareEncoder("libx264"));
 			}
 
 			if (strictGpuOnly)
