@@ -25,7 +25,8 @@ public sealed class FfmpegClipWriter : IClipWriter
 
 		try
 		{
-			var clipFps = ResolveClipFps();
+			var defaultClipFps = ResolveClipFps();
+			var clipFps = ResolveClipFps(snapshot, maxDuration, defaultClipFps);
 			var ffmpegPath = ResolveFfmpegPath();
 			var durationArg = string.Empty;
 			if (maxDuration.HasValue && maxDuration.Value > TimeSpan.Zero)
@@ -115,6 +116,96 @@ public sealed class FfmpegClipWriter : IClipWriter
 		}
 
 		return 60;
+	}
+
+	private static int ResolveClipFps(EncodedPacketSnapshot snapshot, TimeSpan? maxDuration, int fallbackFps)
+	{
+		var frameCount = CountAccessUnits(snapshot.Packets);
+		if (frameCount <= 0)
+		{
+			return fallbackFps;
+		}
+
+		if (maxDuration.HasValue && maxDuration.Value > TimeSpan.Zero)
+		{
+			var targetSeconds = maxDuration.Value.TotalSeconds;
+			var targetFps = (int)Math.Round(frameCount / targetSeconds, MidpointRounding.AwayFromZero);
+			return Math.Clamp(targetFps, 1, 240);
+		}
+
+		var firstTs = long.MaxValue;
+		var lastTs = long.MinValue;
+		foreach (var packet in snapshot.Packets)
+		{
+			var ts = packet.PresentationTimestamp;
+			if (ts <= 0)
+			{
+				continue;
+			}
+
+			if (ts < firstTs)
+			{
+				firstTs = ts;
+			}
+
+			if (ts > lastTs)
+			{
+				lastTs = ts;
+			}
+		}
+
+		if (firstTs == long.MaxValue || lastTs <= firstTs)
+		{
+			return fallbackFps;
+		}
+
+		var seconds = (lastTs - firstTs) / 1000.0;
+		if (seconds <= 0.01)
+		{
+			return fallbackFps;
+		}
+
+		var estimated = (int)Math.Round(frameCount / seconds, MidpointRounding.AwayFromZero);
+		return Math.Clamp(estimated, 1, 240);
+	}
+
+	private static int CountAccessUnits(IReadOnlyList<EncodedPacket> packets)
+	{
+		var frames = 0;
+		for (var i = 0; i < packets.Count; i++)
+		{
+			var nalType = GetNalType(packets[i].Data.Span);
+			if (nalType is >= 1 and <= 5)
+			{
+				frames++;
+			}
+		}
+
+		return frames;
+	}
+
+	private static int GetNalType(ReadOnlySpan<byte> data)
+	{
+		if (data.Length < 5)
+		{
+			return -1;
+		}
+
+		var idx = 0;
+		if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01)
+		{
+			idx = 3;
+		}
+		else if (data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01)
+		{
+			idx = 4;
+		}
+		else
+		{
+			return -1;
+		}
+
+		return data[idx] & 0x1F;
 	}
 
 	private static string ResolveFfmpegPath()

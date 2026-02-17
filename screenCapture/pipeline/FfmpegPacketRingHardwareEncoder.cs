@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Buffers;
 using System.Threading;
 using System.Threading.Channels;
 using Vortice.Direct3D11;
@@ -44,6 +43,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private long _gpuCopyFailures;
 	private double _frameIntervalMs = 16.6667;
 	private long _duplicatedFrames;
+	private long _stderrCharsRead;
+	private readonly Stack<byte[]> _bufferPool = new();
+	private readonly object _bufferPoolGate = new();
+	private int _bufferSizeBytes;
+	private int _maxPooledBuffers = 4;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -63,6 +67,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_inputWidth = Math.Max(1, settings.Width);
 			_inputHeight = Math.Max(1, settings.Height);
 			_frameIntervalMs = 1000.0 / Math.Max(1, settings.Fps);
+			lock (_bufferPoolGate)
+			{
+				_bufferSizeBytes = 0;
+				_bufferPool.Clear();
+			}
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds) + 4));
 			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
@@ -122,7 +131,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				var height = frame.Height;
 				var rowBytes = width * 4;
 				var totalBytes = rowBytes * height;
-				var buffer = ArrayPool<byte>.Shared.Rent(totalBytes);
+				var buffer = RentFrameBuffer(totalBytes);
 				try
 				{
 					for (var y = 0; y < height; y++)
@@ -134,7 +143,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 					if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes, frame.Timestamp)))
 					{
 						Interlocked.Increment(ref _queueDrops);
-						ArrayPool<byte>.Shared.Return(buffer);
+						ReturnFrameBuffer(buffer);
 						return;
 					}
 
@@ -187,7 +196,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)};duplicatedFrames={Interlocked.Read(ref _duplicatedFrames)}";
+			var ffmpegWorkingSet = _ffmpeg?.WorkingSet64 ?? 0;
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)};duplicatedFrames={Interlocked.Read(ref _duplicatedFrames)};stderrChars={Interlocked.Read(ref _stderrCharsRead)};ffmpegWorkingSet={ffmpegWorkingSet}";
 		}
 	}
 
@@ -257,7 +267,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			});
 			_stdinTask = Task.Run(WriteInputLoop);
 			_stdoutTask = Task.Run(ReadEncodedStdoutLoop);
-			_stderrTask = Task.Run(() => _ffmpeg.StandardError.ReadToEnd());
+			_stderrTask = Task.Run(ReadStderrLoop);
 		}
 		catch (Win32Exception)
 		{
@@ -370,45 +380,19 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 		try
 		{
-			long firstTs = 0;
-			long lastTs = 0;
-			long emittedFrames = 0;
 			await foreach (var input in queue.Reader.ReadAllAsync())
 			{
 				try
 				{
 					var ts = input.FrameTimestamp;
-					var repeats = 1;
-					if (firstTs == 0)
-					{
-						firstTs = ts;
-					}
-					else if (ts > firstTs)
-					{
-						var targetFrames = ((ts - firstTs) / _frameIntervalMs) + 1.0;
-						repeats = (int)Math.Floor(targetFrames - emittedFrames);
-						repeats = Math.Clamp(repeats, 1, 8);
-					}
-
-					for (var i = 0; i < repeats; i++)
-					{
-						await stdin.WriteAsync(input.Buffer, 0, input.Count);
-						Interlocked.Add(ref _inputBytes, input.Count);
-					}
-					emittedFrames += repeats;
-
-					if (repeats > 1)
-					{
-						Interlocked.Add(ref _duplicatedFrames, repeats - 1);
-					}
-
-					lastTs = ts;
+					await stdin.WriteAsync(input.Buffer, 0, input.Count);
+					Interlocked.Add(ref _inputBytes, input.Count);
 					Interlocked.Exchange(ref _lastSubmittedFrameTs, ts);
 				}
 				finally
 				{
 					Interlocked.Decrement(ref _queuedBuffers);
-					ArrayPool<byte>.Shared.Return(input.Buffer);
+					ReturnFrameBuffer(input.Buffer);
 				}
 			}
 		}
@@ -472,6 +456,34 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 	}
 
+	private async Task ReadStderrLoop()
+	{
+		var ffmpeg = _ffmpeg;
+		if (ffmpeg == null)
+		{
+			return;
+		}
+
+		var stderr = ffmpeg.StandardError;
+		var buffer = new char[1024];
+		try
+		{
+			while (true)
+			{
+				var read = await stderr.ReadAsync(buffer, 0, buffer.Length);
+				if (read <= 0)
+				{
+					break;
+				}
+
+				Interlocked.Add(ref _stderrCharsRead, read);
+			}
+		}
+		catch
+		{
+		}
+	}
+
 	private void EnsureStaging(int width, int height, ID3D11Texture2D sourceTexture, ID3D11Device sourceDevice)
 	{
 		if (_staging != null &&
@@ -516,5 +528,45 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		return "ffmpeg";
 	}
 
+	private byte[] RentFrameBuffer(int size)
+	{
+		lock (_bufferPoolGate)
+		{
+			if (_bufferSizeBytes != size)
+			{
+				_bufferPool.Clear();
+				_bufferSizeBytes = size;
+			}
+
+			if (_bufferPool.Count > 0)
+			{
+				return _bufferPool.Pop();
+			}
+		}
+
+		return new byte[size];
+	}
+
+	private void ReturnFrameBuffer(byte[] buffer)
+	{
+		lock (_bufferPoolGate)
+		{
+			if (buffer.Length != _bufferSizeBytes)
+			{
+				return;
+			}
+
+			if (_bufferPool.Count >= _maxPooledBuffers)
+			{
+				return;
+			}
+
+			_bufferPool.Push(buffer);
+		}
+	}
+
 	private readonly record struct PendingInput(byte[] Buffer, int Count, long FrameTimestamp);
 }
+
+
+

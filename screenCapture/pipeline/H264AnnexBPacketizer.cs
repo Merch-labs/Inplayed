@@ -1,5 +1,7 @@
 public sealed class H264AnnexBPacketizer
 {
+	private const int MaxPendingBytes = 8 * 1024 * 1024;
+	private const int KeepTailBytes = 1024 * 1024;
 	private readonly List<byte> _buffer = new(1024 * 1024);
 
 	public IReadOnlyList<EncodedPacket> Push(ReadOnlySpan<byte> data, long pts, long dts)
@@ -16,6 +18,7 @@ public sealed class H264AnnexBPacketizer
 		var nalStarts = FindStartCodes(_buffer);
 		if (nalStarts.Count < 2)
 		{
+			TrimPendingBufferIfNeeded(nalStarts);
 			return packets;
 		}
 
@@ -57,6 +60,32 @@ public sealed class H264AnnexBPacketizer
 		{
 			new EncodedPacket(all, pts, dts, IsKeyframeNal(all))
 		};
+	}
+
+	private void TrimPendingBufferIfNeeded(List<int> nalStarts)
+	{
+		if (_buffer.Count <= MaxPendingBytes)
+		{
+			return;
+		}
+
+		if (nalStarts.Count > 0)
+		{
+			var lastStart = nalStarts[^1];
+			if (lastStart > 0 && lastStart < _buffer.Count)
+			{
+				_buffer.RemoveRange(0, lastStart);
+			}
+		}
+
+		if (_buffer.Count > MaxPendingBytes)
+		{
+			var trim = _buffer.Count - KeepTailBytes;
+			if (trim > 0)
+			{
+				_buffer.RemoveRange(0, trim);
+			}
+		}
 	}
 
 	private static List<int> FindStartCodes(List<byte> bytes)
