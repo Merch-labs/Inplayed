@@ -1,20 +1,21 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 
 public sealed class FfmpegClipWriter : IClipWriter
 {
-	public Task WriteAsync(string outputPath, EncodedPacketSnapshot snapshot, CancellationToken token = default)
+	public Task WriteAsync(string outputPath, EncodedPacketSnapshot snapshot, TimeSpan? maxDuration = null, CancellationToken token = default)
 	{
 		if (snapshot.Packets.Count == 0)
 		{
 			return Task.CompletedTask;
 		}
 
-		return Task.Run(() => WriteInternal(outputPath, snapshot, token), token);
+		return Task.Run(() => WriteInternal(outputPath, snapshot, maxDuration, token), token);
 	}
 
-	private static void WriteInternal(string outputPath, EncodedPacketSnapshot snapshot, CancellationToken token)
+	private static void WriteInternal(string outputPath, EncodedPacketSnapshot snapshot, TimeSpan? maxDuration, CancellationToken token)
 	{
 		var outputDir = Path.GetDirectoryName(outputPath);
 		if (!string.IsNullOrWhiteSpace(outputDir))
@@ -26,7 +27,14 @@ public sealed class FfmpegClipWriter : IClipWriter
 		{
 			var clipFps = ResolveClipFps();
 			var ffmpegPath = ResolveFfmpegPath();
-			var args = $"-y -r {clipFps} -f h264 -i pipe:0 -c copy \"{outputPath}\"";
+			var durationArg = string.Empty;
+			if (maxDuration.HasValue && maxDuration.Value > TimeSpan.Zero)
+			{
+				var seconds = maxDuration.Value.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+				durationArg = $" -t {seconds}";
+			}
+
+			var args = $"-y -r {clipFps} -f h264 -i pipe:0 -c copy{durationArg} \"{outputPath}\"";
 			var psi = new ProcessStartInfo
 			{
 				FileName = ffmpegPath,
@@ -43,16 +51,44 @@ public sealed class FfmpegClipWriter : IClipWriter
 				throw new InvalidOperationException("Failed to start ffmpeg process.");
 			}
 
-			using (var stdin = process.StandardInput.BaseStream)
+			var pipeClosedByFfmpeg = false;
+			var stdin = process.StandardInput.BaseStream;
+			try
 			{
 				foreach (var packet in snapshot.Packets)
 				{
 					token.ThrowIfCancellationRequested();
 					var data = packet.Data.Span;
-					stdin.Write(data);
+					try
+					{
+						stdin.Write(data);
+					}
+					catch (IOException)
+					{
+						// Expected when ffmpeg reaches -t and closes stdin early.
+						pipeClosedByFfmpeg = true;
+						break;
+					}
 				}
 
-				stdin.Flush();
+				if (!pipeClosedByFfmpeg)
+				{
+					stdin.Flush();
+				}
+			}
+			finally
+			{
+				try
+				{
+					stdin.Dispose();
+				}
+				catch (IOException) when (pipeClosedByFfmpeg)
+				{
+					// Expected when ffmpeg already closed stdin after reaching -t.
+				}
+				catch (ObjectDisposedException)
+				{
+				}
 			}
 
 			var stderr = process.StandardError.ReadToEnd();

@@ -980,7 +980,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 				if (snapshot.Packets.Count > 0)
 				{
 					Interlocked.Increment(ref _flushRecoveredCount);
-					return _clipWriter.WriteAsync(outputPath, snapshot, token);
+					return _clipWriter.WriteAsync(outputPath, snapshot, clipLength, token);
 				}
 
 				lock (_sync)
@@ -1005,7 +1005,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 				if (snapshot.Packets.Count > 0)
 				{
 					Interlocked.Increment(ref _flushRecoveredCount);
-					return _clipWriter.WriteAsync(outputPath, snapshot, token);
+					return _clipWriter.WriteAsync(outputPath, snapshot, clipLength, token);
 				}
 			}
 
@@ -1013,7 +1013,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			return Task.CompletedTask;
 		}
 
-		return _clipWriter.WriteAsync(outputPath, snapshot, token);
+		return _clipWriter.WriteAsync(outputPath, snapshot, clipLength, token);
 	}
 
 	public string GetDebugStatus()

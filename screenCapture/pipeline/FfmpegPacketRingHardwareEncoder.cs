@@ -63,7 +63,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_inputWidth = Math.Max(1, settings.Width);
 			_inputHeight = Math.Max(1, settings.Height);
 			_frameIntervalMs = 1000.0 / Math.Max(1, settings.Fps);
-			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
+			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds) + 4));
 			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
 			_running = true;
@@ -179,7 +179,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			snapshot = _ringBuffer.SnapshotLast(clipLength);
 		}
 
-		return _clipWriter.WriteAsync(outputPath, snapshot, token);
+		return _clipWriter.WriteAsync(outputPath, snapshot, clipLength, token);
 	}
 
 	public string GetDebugStatus()
@@ -345,17 +345,18 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 	private static string BuildCodecArgs(string codec, int fps, int bitrate)
 	{
+		var keyint = Math.Max(1, fps);
 		if (codec.Contains("nvenc", StringComparison.OrdinalIgnoreCase))
 		{
-			return $"-c:v {codec} -preset p1 -tune ll -g {fps * 2} -bf 0 -b:v {bitrate}";
+			return $"-c:v {codec} -preset p1 -tune ll -g {keyint} -bf 0 -b:v {bitrate}";
 		}
 
 		if (codec.Equals("libx264", StringComparison.OrdinalIgnoreCase))
 		{
-			return $"-c:v libx264 -preset veryfast -tune zerolatency -g {fps * 2} -bf 0 -b:v {bitrate}";
+			return $"-c:v libx264 -preset veryfast -tune zerolatency -g {keyint} -bf 0 -b:v {bitrate}";
 		}
 
-		return $"-c:v {codec} -g {fps * 2} -bf 0 -b:v {bitrate}";
+		return $"-c:v {codec} -g {keyint} -bf 0 -b:v {bitrate}";
 	}
 
 	private async Task WriteInputLoop()
@@ -369,18 +370,24 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 		try
 		{
+			long firstTs = 0;
 			long lastTs = 0;
+			long emittedFrames = 0;
 			await foreach (var input in queue.Reader.ReadAllAsync())
 			{
 				try
 				{
 					var ts = input.FrameTimestamp;
 					var repeats = 1;
-					if (lastTs > 0 && ts > lastTs)
+					if (firstTs == 0)
 					{
-						var deltaMs = ts - lastTs;
-						repeats = (int)Math.Round(deltaMs / _frameIntervalMs);
-						repeats = Math.Clamp(repeats, 1, 4);
+						firstTs = ts;
+					}
+					else if (ts > firstTs)
+					{
+						var targetFrames = ((ts - firstTs) / _frameIntervalMs) + 1.0;
+						repeats = (int)Math.Floor(targetFrames - emittedFrames);
+						repeats = Math.Clamp(repeats, 1, 8);
 					}
 
 					for (var i = 0; i < repeats; i++)
@@ -388,6 +395,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 						await stdin.WriteAsync(input.Buffer, 0, input.Count);
 						Interlocked.Add(ref _inputBytes, input.Count);
 					}
+					emittedFrames += repeats;
 
 					if (repeats > 1)
 					{
