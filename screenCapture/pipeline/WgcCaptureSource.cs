@@ -5,6 +5,10 @@ using Windows.Graphics.DirectX.Direct3D11;
 
 public sealed class WgcCaptureSource : ICaptureSource
 {
+	private static readonly Guid _d3d11Texture2DIid = typeof(Vortice.Direct3D11.ID3D11Texture2D).GUID;
+	private static readonly object _getInterfaceGate = new();
+	private static GetInterfaceDelegate? _getInterface;
+
 	private readonly GraphicsCaptureItem _item;
 	private readonly D3D11DeviceBundle _device;
 	private Direct3D11CaptureFramePool? _framePool;
@@ -102,11 +106,7 @@ public sealed class WgcCaptureSource : ICaptureSource
 			IntPtr texturePtr;
 			try
 			{
-				var access = (IDirect3DDxgiInterfaceAccess)Marshal.GetTypedObjectForIUnknown(
-					accessPtr,
-					typeof(IDirect3DDxgiInterfaceAccess));
-				var iid = typeof(Vortice.Direct3D11.ID3D11Texture2D).GUID;
-				texturePtr = access.GetInterface(ref iid);
+				texturePtr = GetTextureInterface(accessPtr);
 			}
 			finally
 			{
@@ -128,4 +128,35 @@ public sealed class WgcCaptureSource : ICaptureSource
 		StopAsync().GetAwaiter().GetResult();
 		_device.Dispose();
 	}
+
+	private static IntPtr GetTextureInterface(IntPtr accessPtr)
+	{
+		var del = _getInterface;
+		if (del == null)
+		{
+			lock (_getInterfaceGate)
+			{
+				del = _getInterface;
+				if (del == null)
+				{
+					var vtbl = Marshal.ReadIntPtr(accessPtr);
+					var fnPtr = Marshal.ReadIntPtr(vtbl, IntPtr.Size * 3);
+					del = Marshal.GetDelegateForFunctionPointer<GetInterfaceDelegate>(fnPtr);
+					_getInterface = del;
+				}
+			}
+		}
+
+		var iid = _d3d11Texture2DIid;
+		var hr = del(accessPtr, ref iid, out var texturePtr);
+		if (hr < 0)
+		{
+			Marshal.ThrowExceptionForHR(hr);
+		}
+
+		return texturePtr;
+	}
+
+	[UnmanagedFunctionPointer(CallingConvention.StdCall)]
+	private delegate int GetInterfaceDelegate(IntPtr @this, ref Guid iid, out IntPtr result);
 }

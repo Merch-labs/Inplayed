@@ -48,6 +48,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private readonly object _bufferPoolGate = new();
 	private int _bufferSizeBytes;
 	private int _maxPooledBuffers = 4;
+	private int _allocatedBuffers;
+	private int _maxAllocatedBuffers = 6;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -71,6 +73,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			{
 				_bufferSizeBytes = 0;
 				_bufferPool.Clear();
+				_allocatedBuffers = 0;
 			}
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds) + 4));
 			_clock = Stopwatch.StartNew();
@@ -132,6 +135,11 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				var rowBytes = width * 4;
 				var totalBytes = rowBytes * height;
 				var buffer = RentFrameBuffer(totalBytes);
+				if (buffer == null)
+				{
+					Interlocked.Increment(ref _queueDrops);
+					return;
+				}
 				try
 				{
 					for (var y = 0; y < height; y++)
@@ -196,8 +204,15 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
+			int allocatedBuffers;
+			int pooledBuffers;
+			lock (_bufferPoolGate)
+			{
+				allocatedBuffers = _allocatedBuffers;
+				pooledBuffers = _bufferPool.Count;
+			}
 			var ffmpegWorkingSet = _ffmpeg?.WorkingSet64 ?? 0;
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)};duplicatedFrames={Interlocked.Read(ref _duplicatedFrames)};stderrChars={Interlocked.Read(ref _stderrCharsRead)};ffmpegWorkingSet={ffmpegWorkingSet}";
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};allocatedBuffers={allocatedBuffers};pooledBuffers={pooledBuffers};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)};duplicatedFrames={Interlocked.Read(ref _duplicatedFrames)};stderrChars={Interlocked.Read(ref _stderrCharsRead)};ffmpegWorkingSet={ffmpegWorkingSet}";
 		}
 	}
 
@@ -528,7 +543,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		return "ffmpeg";
 	}
 
-	private byte[] RentFrameBuffer(int size)
+	private byte[]? RentFrameBuffer(int size)
 	{
 		lock (_bufferPoolGate)
 		{
@@ -536,12 +551,20 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			{
 				_bufferPool.Clear();
 				_bufferSizeBytes = size;
+				_allocatedBuffers = 0;
 			}
 
 			if (_bufferPool.Count > 0)
 			{
 				return _bufferPool.Pop();
 			}
+
+			if (_allocatedBuffers >= _maxAllocatedBuffers)
+			{
+				return null;
+			}
+
+			_allocatedBuffers++;
 		}
 
 		return new byte[size];

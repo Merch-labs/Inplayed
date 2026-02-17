@@ -3,6 +3,8 @@ public sealed class H264AnnexBPacketizer
 	private const int MaxPendingBytes = 8 * 1024 * 1024;
 	private const int KeepTailBytes = 1024 * 1024;
 	private readonly List<byte> _buffer = new(1024 * 1024);
+	private readonly List<int> _nalStarts = new(2048);
+	private readonly List<EncodedPacket> _packets = new(512);
 
 	public IReadOnlyList<EncodedPacket> Push(ReadOnlySpan<byte> data, long pts, long dts)
 	{
@@ -14,18 +16,18 @@ public sealed class H264AnnexBPacketizer
 			}
 		}
 
-		var packets = new List<EncodedPacket>();
-		var nalStarts = FindStartCodes(_buffer);
-		if (nalStarts.Count < 2)
+		_packets.Clear();
+		FindStartCodes(_buffer, _nalStarts);
+		if (_nalStarts.Count < 2)
 		{
-			TrimPendingBufferIfNeeded(nalStarts);
-			return packets;
+			TrimPendingBufferIfNeeded(_nalStarts);
+			return Array.Empty<EncodedPacket>();
 		}
 
-		for (var i = 0; i < nalStarts.Count - 1; i++)
+		for (var i = 0; i < _nalStarts.Count - 1; i++)
 		{
-			var start = nalStarts[i];
-			var end = nalStarts[i + 1];
+			var start = _nalStarts[i];
+			var end = _nalStarts[i + 1];
 			var size = end - start;
 			if (size <= 0)
 			{
@@ -35,16 +37,21 @@ public sealed class H264AnnexBPacketizer
 			var chunk = new byte[size];
 			_buffer.CopyTo(start, chunk, 0, size);
 			var keyframe = IsKeyframeNal(chunk);
-			packets.Add(new EncodedPacket(chunk, pts, dts, keyframe));
+			_packets.Add(new EncodedPacket(chunk, pts, dts, keyframe));
 		}
 
-		var keepFrom = nalStarts[^1];
+		var keepFrom = _nalStarts[^1];
 		if (keepFrom > 0)
 		{
 			_buffer.RemoveRange(0, keepFrom);
 		}
 
-		return packets;
+		if (_packets.Count == 0)
+		{
+			return Array.Empty<EncodedPacket>();
+		}
+
+		return _packets.ToArray();
 	}
 
 	public IReadOnlyList<EncodedPacket> Flush(long pts, long dts)
@@ -88,9 +95,9 @@ public sealed class H264AnnexBPacketizer
 		}
 	}
 
-	private static List<int> FindStartCodes(List<byte> bytes)
+	private static void FindStartCodes(List<byte> bytes, List<int> starts)
 	{
-		var starts = new List<int>();
+		starts.Clear();
 		for (var i = 0; i < bytes.Count - 3; i++)
 		{
 			if (bytes[i] == 0x00 && bytes[i + 1] == 0x00)
@@ -114,8 +121,6 @@ public sealed class H264AnnexBPacketizer
 		{
 			starts.Add(0);
 		}
-
-		return starts;
 	}
 
 	private static bool IsKeyframeNal(ReadOnlySpan<byte> nal)
