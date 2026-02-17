@@ -42,6 +42,8 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private long _queuedBuffers;
 	private long _lastSubmittedFrameTs;
 	private long _gpuCopyFailures;
+	private double _frameIntervalMs = 16.6667;
+	private long _duplicatedFrames;
 
 	public FfmpegPacketRingHardwareEncoder(string videoCodec)
 	{
@@ -60,6 +62,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_settings = settings;
 			_inputWidth = Math.Max(1, settings.Width);
 			_inputHeight = Math.Max(1, settings.Height);
+			_frameIntervalMs = 1000.0 / Math.Max(1, settings.Fps);
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds)));
 			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
@@ -184,7 +187,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		lock (_gate)
 		{
 			var ring = _ringBuffer?.GetStats() ?? (0, 0L);
-			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)}";
+			return $"codec={_videoCodec};running={_running};inputBytes={Interlocked.Read(ref _inputBytes)};packets={Interlocked.Read(ref _packetCount)};packetBytes={Interlocked.Read(ref _packetBytes)};ringPackets={ring.Item1};ringBytes={ring.Item2};restarts={Interlocked.Read(ref _restartCount)};queueDrops={Interlocked.Read(ref _queueDrops)};queuedBuffers={Interlocked.Read(ref _queuedBuffers)};lastFrameTs={Interlocked.Read(ref _lastSubmittedFrameTs)};gpuCopyFailures={Interlocked.Read(ref _gpuCopyFailures)};duplicatedFrames={Interlocked.Read(ref _duplicatedFrames)}";
 		}
 	}
 
@@ -366,13 +369,33 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 
 		try
 		{
+			long lastTs = 0;
 			await foreach (var input in queue.Reader.ReadAllAsync())
 			{
 				try
 				{
-					await stdin.WriteAsync(input.Buffer, 0, input.Count);
-					Interlocked.Add(ref _inputBytes, input.Count);
-					Interlocked.Exchange(ref _lastSubmittedFrameTs, input.FrameTimestamp);
+					var ts = input.FrameTimestamp;
+					var repeats = 1;
+					if (lastTs > 0 && ts > lastTs)
+					{
+						var deltaMs = ts - lastTs;
+						repeats = (int)Math.Round(deltaMs / _frameIntervalMs);
+						repeats = Math.Clamp(repeats, 1, 4);
+					}
+
+					for (var i = 0; i < repeats; i++)
+					{
+						await stdin.WriteAsync(input.Buffer, 0, input.Count);
+						Interlocked.Add(ref _inputBytes, input.Count);
+					}
+
+					if (repeats > 1)
+					{
+						Interlocked.Add(ref _duplicatedFrames, repeats - 1);
+					}
+
+					lastTs = ts;
+					Interlocked.Exchange(ref _lastSubmittedFrameTs, ts);
 				}
 				finally
 				{
