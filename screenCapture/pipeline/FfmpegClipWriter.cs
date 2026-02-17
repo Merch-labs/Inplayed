@@ -24,8 +24,9 @@ public sealed class FfmpegClipWriter : IClipWriter
 
 		try
 		{
+			var clipFps = ResolveClipFps();
 			var ffmpegPath = ResolveFfmpegPath();
-			var args = $"-y -f h264 -i pipe:0 -c copy \"{outputPath}\"";
+			var args = $"-y -r {clipFps} -f h264 -i pipe:0 -c copy \"{outputPath}\"";
 			var psi = new ProcessStartInfo
 			{
 				FileName = ffmpegPath,
@@ -67,6 +68,17 @@ public sealed class FfmpegClipWriter : IClipWriter
 			throw new InvalidOperationException(
 				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, or install ffmpeg on PATH.");
 		}
+	}
+
+	private static int ResolveClipFps()
+	{
+		var raw = Environment.GetEnvironmentVariable("INPLAYED_CLIP_FPS");
+		if (int.TryParse(raw, out var fps) && fps > 0)
+		{
+			return fps;
+		}
+
+		return 60;
 	}
 
 	private static string ResolveFfmpegPath()
