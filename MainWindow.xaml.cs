@@ -16,10 +16,15 @@ using Microsoft.Web.WebView2.Core;
 
 public partial class MainWindow : Window
 {
+	private readonly Backend _backend = new();
+	private readonly GlobalHotkey _saveClipHotkey;
+
 	public MainWindow()
 	{
 		InitializeComponent();
 		Loaded += MainWindow_Loaded;
+		_saveClipHotkey = new GlobalHotkey(this, ModifierKeys.Alt, Key.F);
+		_saveClipHotkey.Pressed += async (_, _) => await _backend.SaveClip();
 	}
 
 	private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -35,11 +40,10 @@ public partial class MainWindow : Window
 
 		webView.CoreWebView2.AddHostObjectToScript(
 			"backend",
-			new Backend()
+			_backend
 		);
 	}
 }
-
 [ComVisible(true)]
 [ClassInterface(ClassInterfaceType.AutoDual)]
 public class Backend
@@ -228,3 +232,5 @@ public class Backend
 		Console.WriteLine($"Session status: {status}");
 	}
 }
+
+
