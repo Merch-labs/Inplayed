@@ -248,7 +248,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	{
 		var fps = Math.Max(1, settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
-		var ffmpegPath = ResolveFfmpegPath();
+		var ffmpegPath = FfmpegPathResolver.Resolve();
 		var codecArgs = BuildCodecArgs(codec, fps, bitrate);
 		var args =
 			$"-hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s {width}x{height} -r {fps} " +
@@ -286,8 +286,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 		catch (Win32Exception)
 		{
-			throw new InvalidOperationException(
-				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, or install ffmpeg on PATH.");
+			throw new InvalidOperationException(FfmpegPathResolver.MissingMessage);
 		}
 	}
 
@@ -523,24 +522,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		_stagingWidth = width;
 		_stagingHeight = height;
 		_stagingDevicePtr = sourceDevice.NativePointer;
-	}
-
-	private static string ResolveFfmpegPath()
-	{
-		var baseDir = AppContext.BaseDirectory;
-		var local = Path.Combine(baseDir, "ffmpeg.exe");
-		if (File.Exists(local))
-		{
-			return local;
-		}
-
-		var tools = Path.Combine(baseDir, "tools", "ffmpeg", "ffmpeg.exe");
-		if (File.Exists(tools))
-		{
-			return tools;
-		}
-
-		return "ffmpeg";
 	}
 
 	private byte[]? RentFrameBuffer(int size)

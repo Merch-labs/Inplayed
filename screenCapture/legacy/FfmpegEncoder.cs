@@ -107,7 +107,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 		var fps = Math.Max(1.0, fpsOverride ?? settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
-		var ffmpegPath = ResolveFfmpegPath();
+		var ffmpegPath = FfmpegPathResolver.Resolve();
 		var args =
 			$"-y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
 			$"-i - -c:v {_videoCodec} -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";
@@ -150,83 +150,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		}
 		catch (Win32Exception)
 		{
-			throw new InvalidOperationException(
-				"ffmpeg was not found. Run scripts\\download-ffmpeg.ps1, place ffmpeg.exe next to the app, " +
-				"or install ffmpeg and ensure it is available on PATH.");
-		}
-	}
-
-	private static string ResolveFfmpegPath()
-	{
-		var baseDir = AppContext.BaseDirectory;
-		var local = Path.Combine(baseDir, "ffmpeg.exe");
-		if (File.Exists(local))
-		{
-			return local;
-		}
-
-		var tools = Path.Combine(baseDir, "tools", "ffmpeg", "ffmpeg.exe");
-		if (File.Exists(tools))
-		{
-			return tools;
-		}
-
-		var searchDir = new DirectoryInfo(baseDir);
-		string? repoRoot = null;
-		while (searchDir != null)
-		{
-			var repoTools = Path.Combine(searchDir.FullName, "tools", "ffmpeg", "ffmpeg.exe");
-			if (File.Exists(repoTools))
-			{
-				return repoTools;
-			}
-
-			if (repoRoot == null && File.Exists(Path.Combine(searchDir.FullName, "inplayed.csproj")))
-			{
-				repoRoot = searchDir.FullName;
-			}
-
-			searchDir = searchDir.Parent;
-		}
-
-		if (!string.IsNullOrWhiteSpace(repoRoot))
-		{
-			TryDownloadFfmpeg(repoRoot);
-			var repoTools = Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg.exe");
-			if (File.Exists(repoTools))
-			{
-				return repoTools;
-			}
-		}
-
-		return "ffmpeg";
-	}
-
-	private static void TryDownloadFfmpeg(string repoRoot)
-	{
-		try
-		{
-			var scriptPath = Path.Combine(repoRoot, "scripts", "download-ffmpeg.ps1");
-			if (!File.Exists(scriptPath))
-			{
-				return;
-			}
-
-			var psi = new ProcessStartInfo
-			{
-				FileName = "powershell",
-				Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
-				UseShellExecute = false,
-				CreateNoWindow = true,
-				WorkingDirectory = repoRoot
-			};
-
-			using var process = Process.Start(psi);
-			process?.WaitForExit();
-		}
-		catch
-		{
-			// Swallow and let normal ffmpeg resolution continue/fail with existing error message.
+			throw new InvalidOperationException(FfmpegPathResolver.MissingMessage);
 		}
 	}
 }
