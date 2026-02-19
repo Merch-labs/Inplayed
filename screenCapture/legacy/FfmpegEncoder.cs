@@ -151,7 +151,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		catch (Win32Exception)
 		{
 			throw new InvalidOperationException(
-				"ffmpeg was not found. Place ffmpeg.exe next to the app, in tools\\ffmpeg\\ffmpeg.exe, " +
+				"ffmpeg was not found. Run scripts\\download-ffmpeg.ps1, place ffmpeg.exe next to the app, " +
 				"or install ffmpeg and ensure it is available on PATH.");
 		}
 	}
@@ -169,6 +169,18 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		if (File.Exists(tools))
 		{
 			return tools;
+		}
+
+		var searchDir = new DirectoryInfo(baseDir);
+		while (searchDir != null)
+		{
+			var repoTools = Path.Combine(searchDir.FullName, "tools", "ffmpeg", "ffmpeg.exe");
+			if (File.Exists(repoTools))
+			{
+				return repoTools;
+			}
+
+			searchDir = searchDir.Parent;
 		}
 
 		return "ffmpeg";
