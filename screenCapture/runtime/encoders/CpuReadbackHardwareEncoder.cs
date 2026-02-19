@@ -9,10 +9,10 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 	private readonly object _gate = new();
 	private RecordingSettings? _settings;
 	private FfmpegEncoder? _encoder;
+	private D3D11DeviceBundle? _device;
 	private ID3D11Texture2D? _staging;
 	private int _stagingWidth;
 	private int _stagingHeight;
-	private nint _stagingDevicePtr;
 	private int _outputWidth;
 	private int _outputHeight;
 	private long _encodedFrames;
@@ -30,6 +30,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 			_outputWidth = settings.Width;
 			_outputHeight = settings.Height;
 			_encoder = new FfmpegEncoder(settings, _videoCodec);
+			_device = D3D11Helper.CreateDevice();
 		}
 	}
 
@@ -37,31 +38,19 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 	{
 		lock (_gate)
 		{
-			if (_settings == null || _encoder == null)
+			if (_settings == null || _encoder == null || _device == null)
 			{
 				return;
 			}
 
-			using var sourceDevice = frame.Texture.Device;
-			if (sourceDevice == null)
-			{
-				return;
-			}
-
-			using var sourceContext = sourceDevice.ImmediateContext;
-			if (sourceContext == null)
-			{
-				return;
-			}
-
-			EnsureStaging(frame.Width, frame.Height, frame.Texture, sourceDevice);
+			EnsureStaging(frame.Width, frame.Height, frame.Texture);
 			if (_staging == null)
 			{
 				return;
 			}
 
-			sourceContext.CopyResource(_staging, frame.Texture);
-			var dataBox = sourceContext.Map(_staging, 0, MapMode.Read, MapFlags.None);
+			_device.Context.CopyResource(_staging, frame.Texture);
+			var dataBox = _device.Context.Map(_staging, 0, MapMode.Read, MapFlags.None);
 			try
 			{
 				var width = frame.Width;
@@ -86,7 +75,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 			}
 			finally
 			{
-				sourceContext.Unmap(_staging, 0);
+				_device.Context.Unmap(_staging, 0);
 			}
 		}
 	}
@@ -131,18 +120,16 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 		{
 			_staging?.Dispose();
 			_staging = null;
-			_stagingDevicePtr = 0;
+			_device?.Dispose();
+			_device = null;
 			_encoder?.Dispose();
 			_encoder = null;
 		}
 	}
 
-	private void EnsureStaging(int width, int height, ID3D11Texture2D sourceTexture, ID3D11Device sourceDevice)
+	private void EnsureStaging(int width, int height, ID3D11Texture2D sourceTexture)
 	{
-		if (_staging != null &&
-			width == _stagingWidth &&
-			height == _stagingHeight &&
-			_stagingDevicePtr == sourceDevice.NativePointer)
+		if (_staging != null && width == _stagingWidth && height == _stagingHeight)
 		{
 			return;
 		}
@@ -156,9 +143,8 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
 
-		_staging = sourceDevice.CreateTexture2D(desc);
+		_staging = _device!.Device.CreateTexture2D(desc);
 		_stagingWidth = width;
 		_stagingHeight = height;
-		_stagingDevicePtr = sourceDevice.NativePointer;
 	}
 }
