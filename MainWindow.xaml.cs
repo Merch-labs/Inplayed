@@ -23,7 +23,9 @@ public partial class MainWindow : Window
 	{
 		InitializeComponent();
 		Loaded += MainWindow_Loaded;
-		_saveClipHotkey = new GlobalHotkey(this, ModifierKeys.Alt, Key.F);
+		var appConfig = AppConfig.Load();
+		var hotkey = appConfig.GetSaveClipHotkey();
+		_saveClipHotkey = new GlobalHotkey(this, hotkey.Modifiers, hotkey.Key);
 		_saveClipHotkey.Pressed += async (_, _) => await _backend.SaveClip();
 	}
 

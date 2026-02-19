@@ -1,5 +1,11 @@
 {
-  "encoder": {
-    "nativeNvencEnabled": true
-  }
+	"encoder": {
+		"nativeNvencEnabled": true
+	},
+	"hotkeys": {
+		"saveClip": {
+			"modifiers": "Alt",
+			"key": "F"
+		}
+	}
 }
