@@ -1,53 +1,5 @@
-﻿using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Runtime.InteropServices;
-
 namespace inplayed;
 
-using Microsoft.Web.WebView2.Core;
-
-public partial class MainWindow : Window
-{
-	private readonly Backend _backend = new();
-	private readonly GlobalHotkey _saveClipHotkey;
-
-	public MainWindow()
-	{
-		InitializeComponent();
-		Loaded += MainWindow_Loaded;
-		var appConfig = AppConfig.Load();
-		var hotkey = appConfig.GetSaveClipHotkey();
-		_saveClipHotkey = new GlobalHotkey(this, hotkey.Modifiers, hotkey.Key);
-		_saveClipHotkey.Pressed += async (_, _) => await _backend.SaveClip();
-	}
-
-	private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-	{
-		await webView.EnsureCoreWebView2Async();
-
-		var path = System.IO.Path.Combine(
-			AppDomain.CurrentDomain.BaseDirectory,
-			"ui/index.html"
-		);
-
-		webView.Source = new Uri(path);
-
-		webView.CoreWebView2.AddHostObjectToScript(
-			"backend",
-			_backend
-		);
-	}
-}
-[ComVisible(true)]
-[ClassInterface(ClassInterfaceType.AutoDual)]
 public class Backend
 {
 	private readonly object _sync = new();
@@ -234,5 +186,3 @@ public class Backend
 		Console.WriteLine($"Session status: {status}");
 	}
 }
-
-
