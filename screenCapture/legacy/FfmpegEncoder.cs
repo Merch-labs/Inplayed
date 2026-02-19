@@ -172,6 +172,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		}
 
 		var searchDir = new DirectoryInfo(baseDir);
+		string? repoRoot = null;
 		while (searchDir != null)
 		{
 			var repoTools = Path.Combine(searchDir.FullName, "tools", "ffmpeg", "ffmpeg.exe");
@@ -180,9 +181,52 @@ public sealed class FfmpegEncoder : IVideoEncoder
 				return repoTools;
 			}
 
+			if (repoRoot == null && File.Exists(Path.Combine(searchDir.FullName, "inplayed.csproj")))
+			{
+				repoRoot = searchDir.FullName;
+			}
+
 			searchDir = searchDir.Parent;
 		}
 
+		if (!string.IsNullOrWhiteSpace(repoRoot))
+		{
+			TryDownloadFfmpeg(repoRoot);
+			var repoTools = Path.Combine(repoRoot, "tools", "ffmpeg", "ffmpeg.exe");
+			if (File.Exists(repoTools))
+			{
+				return repoTools;
+			}
+		}
+
 		return "ffmpeg";
+	}
+
+	private static void TryDownloadFfmpeg(string repoRoot)
+	{
+		try
+		{
+			var scriptPath = Path.Combine(repoRoot, "scripts", "download-ffmpeg.ps1");
+			if (!File.Exists(scriptPath))
+			{
+				return;
+			}
+
+			var psi = new ProcessStartInfo
+			{
+				FileName = "powershell",
+				Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				WorkingDirectory = repoRoot
+			};
+
+			using var process = Process.Start(psi);
+			process?.WaitForExit();
+		}
+		catch
+		{
+			// Swallow and let normal ffmpeg resolution continue/fail with existing error message.
+		}
 	}
 }
