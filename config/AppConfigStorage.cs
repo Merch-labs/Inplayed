@@ -1,13 +1,10 @@
 using System.Text.Json;
 using System.IO;
-using System.Windows.Input;
 
 namespace inplayed;
 
-internal sealed class AppConfig
+internal static class AppConfigStorage
 {
-	public bool? NativeNvencEnabled { get; init; }
-	public HotkeyConfig SaveClipHotkey { get; init; } = new();
 	private static readonly AppConfig Default = new()
 	{
 		NativeNvencEnabled = true,
@@ -18,17 +15,11 @@ internal sealed class AppConfig
 		}
 	};
 
-	internal sealed class HotkeyConfig
-	{
-		public string Modifiers { get; init; } = "Alt";
-		public string Key { get; init; } = "F";
-	}
-
 	public static AppConfig Load()
 	{
 		var path = ResolveConfigPath();
 
-		// Always attempt one read first if invalid/corrupt/missing fields, overwrite with defaults and read again.
+		// One read attempt first if invalid/corrupt/missing fields write defaults and retry.
 		for (var attempt = 0; attempt < 2; attempt++)
 		{
 			if (TryRead(path, out var config))
@@ -40,43 +31,6 @@ internal sealed class AppConfig
 		}
 
 		return Default;
-	}
-
-	public (ModifierKeys Modifiers, Key Key) GetSaveClipHotkey()
-	{
-		var modifiers = ParseModifiers(SaveClipHotkey.Modifiers);
-		var key = ParseKey(SaveClipHotkey.Key);
-		return (modifiers, key);
-	}
-
-	private static ModifierKeys ParseModifiers(string value)
-	{
-		if (string.IsNullOrWhiteSpace(value))
-		{
-			return ModifierKeys.Alt;
-		}
-
-		var result = ModifierKeys.None;
-		var parts = value.Split(new[] { '+', '|', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-		foreach (var part in parts)
-		{
-			if (Enum.TryParse(part, true, out ModifierKeys parsed))
-			{
-				result |= parsed;
-			}
-		}
-
-		return result == ModifierKeys.None ? ModifierKeys.Alt : result;
-	}
-
-	private static Key ParseKey(string value)
-	{
-		if (string.IsNullOrWhiteSpace(value))
-		{
-			return Key.F10;
-		}
-
-		return Enum.TryParse(value, true, out Key parsed) ? parsed : Key.F10;
 	}
 
 	private static bool TryRead(string path, out AppConfig config)
@@ -171,7 +125,7 @@ internal sealed class AppConfig
 		}
 		catch
 		{
-			// keep runtime defaults if file cannot be written
+			// Keep runtime defaults if file cannot be written.
 		}
 	}
 
@@ -179,6 +133,8 @@ internal sealed class AppConfig
 	{
 		var candidates = new List<string>
 		{
+			Path.Combine(AppContext.BaseDirectory, "config", "inplayed.config.json"),
+			Path.Combine(Environment.CurrentDirectory, "config", "inplayed.config.json"),
 			Path.Combine(AppContext.BaseDirectory, "inplayed.config.json"),
 			Path.Combine(Environment.CurrentDirectory, "inplayed.config.json")
 		};
@@ -186,6 +142,7 @@ internal sealed class AppConfig
 		var dir = new DirectoryInfo(AppContext.BaseDirectory);
 		for (var i = 0; i < 6 && dir != null; i++)
 		{
+			candidates.Add(Path.Combine(dir.FullName, "config", "inplayed.config.json"));
 			candidates.Add(Path.Combine(dir.FullName, "inplayed.config.json"));
 			dir = dir.Parent;
 		}
