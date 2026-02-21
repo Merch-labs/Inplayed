@@ -24,7 +24,7 @@ internal sealed class AppConfig
 		}
 
 		var result = ModifierKeys.None;
-		var parts = value.Split(new[] { '+', '|', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+		var parts = value.Split(['+', '|', ',', ' '], StringSplitOptions.RemoveEmptyEntries);
 		foreach (var part in parts)
 		{
 			if (Enum.TryParse(part, true, out ModifierKeys parsed))
