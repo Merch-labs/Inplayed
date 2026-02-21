@@ -40,9 +40,9 @@ internal sealed class AppConfig
 	{
 		if (string.IsNullOrWhiteSpace(value))
 		{
-			return Key.F10;
+			return Key.F;
 		}
 
-		return Enum.TryParse(value, true, out Key parsed) ? parsed : Key.F10;
+		return Enum.TryParse(value, true, out Key parsed) ? parsed : Key.F;
 	}
 }
