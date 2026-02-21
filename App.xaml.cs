@@ -10,6 +10,7 @@ public partial class App : System.Windows.Application
 		base.OnStartup(e);
 		ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+		Forms.Application.SetHighDpiMode(Forms.HighDpiMode.PerMonitorV2);
 		Forms.Application.EnableVisualStyles();
 		Forms.Application.SetCompatibleTextRenderingDefault(false);
 

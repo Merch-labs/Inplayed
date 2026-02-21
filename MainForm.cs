@@ -10,16 +10,19 @@ public sealed class MainForm : Form
 
 	public MainForm()
 	{
+		AutoScaleMode = AutoScaleMode.Dpi;
+		AutoScaleDimensions = new SizeF(96F, 96F);
+
 		Text = "inplayed";
-		Width = 1100;
-		Height = 700;
+		Width = ScalePx(1100);
+		Height = ScalePx(700);
 		StartPosition = FormStartPosition.CenterScreen;
-		MinimumSize = new Size(900, 550);
+		MinimumSize = new Size(ScalePx(900), ScalePx(550));
 
 		_sidebarPanel = new Panel
 		{
 			Dock = DockStyle.Left,
-			Width = 220,
+			Width = ScalePx(220),
 			BackColor = Color.Red
 		};
 
@@ -28,7 +31,7 @@ public sealed class MainForm : Form
 			Dock = DockStyle.Fill,
 			FlowDirection = FlowDirection.TopDown,
 			WrapContents = false,
-			Padding = new Padding(10),
+			Padding = new Padding(ScalePx(10)),
 			AutoScroll = true
 		};
 
@@ -48,9 +51,9 @@ public sealed class MainForm : Form
 		var button = new Button
 		{
 			Text = text,
-			Width = 190,
-			Height = 42,
-			Margin = new Padding(0, 0, 0, 8),
+			Width = ScalePx(190),
+			Height = ScalePx(42),
+			Margin = new Padding(0, 0, 0, ScalePx(8)),
 			TextAlign = ContentAlignment.MiddleLeft
 		};
 
@@ -61,5 +64,11 @@ public sealed class MainForm : Form
 
 		_sidebarButtons.Controls.Add(button);
 		return button;
+	}
+
+	private int ScalePx(int px)
+	{
+		var dpi = DeviceDpi > 0 ? DeviceDpi : 96;
+		return (int)Math.Round(px * (dpi / 96.0));
 	}
 }
