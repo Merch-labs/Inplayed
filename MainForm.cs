@@ -19,7 +19,8 @@ public sealed class MainForm : Form
 		_sidebarPanel = new Panel
 		{
 			Dock = DockStyle.Left,
-			Width = 220
+			Width = 220,
+			BackColor = Color.Red
 		};
 
 		_sidebarButtons = new FlowLayoutPanel
