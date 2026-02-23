@@ -90,7 +90,15 @@ public sealed class MainForm : Form
 
 	private Image LoadIcon(string name)
 	{
-		string path = Path.Combine(AppContext.BaseDirectory, $"ui/icons/{name}.png");
-		return Image.FromFile(path);
+		string basePath = Path.Combine(AppContext.BaseDirectory, "ui", "icons");
+		string requestedPath = Path.Combine(basePath, "/{name}.png");
+		string defaultPath = Path.Combine(basePath, "place-holder.png");
+
+		string path = File.Exists(requestedPath) ? requestedPath : defaultPath;
+
+		using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+		{
+			return Image.FromStream(fs);
+		}
 	}
 }
