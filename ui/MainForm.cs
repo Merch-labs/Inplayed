@@ -5,6 +5,8 @@ namespace inplayed;
 
 public sealed class MainForm : Form
 {
+	private readonly Panel _topBarPanel;
+	private readonly Panel _bodyPanel;
 	private readonly Panel _sidebarPanel;
 	private readonly FlowLayoutPanel _sidebarButtons;
 	private readonly Panel _contentPanel;
@@ -20,6 +22,18 @@ public sealed class MainForm : Form
 		Height = UiScale.Px(this, 700);
 		StartPosition = FormStartPosition.CenterScreen;
 		MinimumSize = new Size(UiScale.Px(this, 900), UiScale.Px(this, 550));
+
+		_topBarPanel = new Panel
+		{
+			Dock = DockStyle.Top,
+			Height = UiScale.Px(this, 48),
+			BackColor = Color.FromArgb(32, 32, 32)
+		};
+
+		_bodyPanel = new Panel
+		{
+			Dock = DockStyle.Fill
+		};
 
 		_sidebarPanel = new Panel
 		{
@@ -44,8 +58,11 @@ public sealed class MainForm : Form
 
 		_sidebarPanel.Controls.Add(_sidebarButtons);
 
-		Controls.Add(_contentPanel);
-		Controls.Add(_sidebarPanel);
+		_bodyPanel.Controls.Add(_contentPanel);
+		_bodyPanel.Controls.Add(_sidebarPanel);
+
+		Controls.Add(_bodyPanel);
+		Controls.Add(_topBarPanel);
 
 		AddSidebarButton("home", (_, _) => ShowPage("home"));
 		ShowPage("home");
