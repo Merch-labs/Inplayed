@@ -57,11 +57,14 @@ public sealed class MainForm : Form
 		{
 			BackgroundImage = LoadIcon(name),
 			BackgroundImageLayout = ImageLayout.Zoom,
+			FlatStyle = FlatStyle.Flat,
 			Width = UiScale.Px(this, 70),
 			Height = UiScale.Px(this, 70),
 			Margin = new Padding(0, 0, 0, 0),
 			TextAlign = ContentAlignment.MiddleLeft,
 		};
+		button.FlatAppearance.BorderSize = 0;
+
 
 		if (onClick != null)
 		{
