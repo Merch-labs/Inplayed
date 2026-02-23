@@ -55,7 +55,8 @@ public sealed class MainForm : Form
 	{
 		var button = new Button
 		{
-			Image = LoadIcon(name),
+			BackgroundImage = LoadIcon(name),
+			BackgroundImageLayout = ImageLayout.Zoom,
 			Width = UiScale.Px(this, 70),
 			Height = UiScale.Px(this, 70),
 			Margin = new Padding(0, 0, 0, 0),
