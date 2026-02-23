@@ -59,10 +59,10 @@ public sealed class MainForm : Form
 		_sidebarPanel.Controls.Add(_sidebarButtons);
 
 		_bodyPanel.Controls.Add(_contentPanel);
-		_bodyPanel.Controls.Add(_sidebarPanel);
+		_bodyPanel.Controls.Add(_topBarPanel);
 
 		Controls.Add(_bodyPanel);
-		Controls.Add(_topBarPanel);
+		Controls.Add(_sidebarPanel);
 
 		AddSidebarButton("home", (_, _) => ShowPage("home"));
 		ShowPage("home");
