@@ -47,11 +47,11 @@ public sealed class MainForm : Form
 		Controls.Add(_sidebarPanel);
 	}
 
-	public Button AddSidebarButton(string text, EventHandler? onClick = null)
+	public Button AddSidebarButton(Image icon, EventHandler? onClick = null)
 	{
 		var button = new Button
 		{
-			Text = text,
+			Image = icon,
 			Width = UiScale.Px(this, 70),
 			Height = UiScale.Px(this, 70),
 			Margin = new Padding(0, 0, 0, 0),
