@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Forms;
 
 namespace inplayed;
@@ -45,6 +46,9 @@ public sealed class MainForm : Form
 
 		Controls.Add(_contentPanel);
 		Controls.Add(_sidebarPanel);
+
+		AddSidebarButton(LoadIcon("home"), (_, _) => ShowPage("home"));
+		ShowPage("home");
 	}
 
 	public Button AddSidebarButton(Image icon, EventHandler? onClick = null)
@@ -82,5 +86,11 @@ public sealed class MainForm : Form
 
 		_contentPanel.Controls.Clear();
 		_contentPanel.Controls.Add(page);
+	}
+
+	private Image LoadIcon(string name)
+	{
+		string path = Path.Combine(AppContext.BaseDirectory, $"ui/icons/{name}.png");
+		return Image.FromFile(path);
 	}
 }
