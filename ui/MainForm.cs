@@ -7,6 +7,7 @@ public sealed class MainForm : Form
 	private readonly Panel _sidebarPanel;
 	private readonly FlowLayoutPanel _sidebarButtons;
 	private readonly Panel _contentPanel;
+	private readonly Dictionary<string, UserControl> _pages = new(StringComparer.OrdinalIgnoreCase);
 
 	public MainForm()
 	{
@@ -31,7 +32,7 @@ public sealed class MainForm : Form
 			Dock = DockStyle.Fill,
 			FlowDirection = FlowDirection.TopDown,
 			WrapContents = false,
-			Padding = new Padding(UiScale.Px(this, 10)),
+			Padding = new Padding(UiScale.Px(this, 0)),
 			AutoScroll = true
 		};
 
@@ -51,10 +52,10 @@ public sealed class MainForm : Form
 		var button = new Button
 		{
 			Text = text,
-			Width = UiScale.Px(this, 190),
-			Height = UiScale.Px(this, 42),
-			Margin = new Padding(0, 0, 0, UiScale.Px(this, 8)),
-			TextAlign = ContentAlignment.MiddleLeft
+			Width = UiScale.Px(this, 70),
+			Height = UiScale.Px(this, 70),
+			Margin = new Padding(0, 0, 0, 0),
+			TextAlign = ContentAlignment.MiddleLeft,
 		};
 
 		if (onClick != null)
@@ -64,5 +65,22 @@ public sealed class MainForm : Form
 
 		_sidebarButtons.Controls.Add(button);
 		return button;
+	}
+
+	private void ShowPage(string key)
+	{
+		if (!_pages.TryGetValue(key, out var page))
+		{
+			page = key switch
+			{
+				"home" => new HomePage()
+			};
+
+			page.Dock = DockStyle.Fill;
+			_pages[key] = page;
+		}
+
+		_contentPanel.Controls.Clear();
+		_contentPanel.Controls.Add(page);
 	}
 }
