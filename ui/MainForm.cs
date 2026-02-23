@@ -22,7 +22,7 @@ public sealed class MainForm : Form
 		_sidebarPanel = new Panel
 		{
 			Dock = DockStyle.Left,
-			Width = UiScale.Px(this, 220),
+			Width = UiScale.Px(this, 70),
 			BackColor = Color.Red
 		};
 
