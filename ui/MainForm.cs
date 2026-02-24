@@ -6,6 +6,7 @@ namespace inplayed;
 public sealed class MainForm : Form
 {
 	private readonly Panel _topBarPanel;
+	private readonly Label _topBarTitle;
 	private readonly Panel _bodyPanel;
 	private readonly Panel _sidebarPanel;
 	private readonly FlowLayoutPanel _sidebarButtons;
@@ -29,6 +30,14 @@ public sealed class MainForm : Form
 			Height = UiScale.Px(this, 48),
 			BackColor = Color.FromArgb(32, 32, 32)
 		};
+		_topBarTitle = new Label
+		{
+			Dock = DockStyle.Fill,
+			TextAlign = ContentAlignment.MiddleLeft,
+			Padding = new Padding(UiScale.Px(this, 12), 0, 0, 0),
+			ForeColor = Color.White
+		};
+		_topBarPanel.Controls.Add(_topBarTitle);
 
 		_bodyPanel = new Panel
 		{
@@ -65,6 +74,7 @@ public sealed class MainForm : Form
 		Controls.Add(_sidebarPanel);
 
 		AddSidebarButton("recording", (_, _) => ShowPage("recording"));
+		AddSidebarButton("library", (_, _) => ShowPage("library"));
 		ShowPage("recording");
 	}
 
@@ -98,7 +108,9 @@ public sealed class MainForm : Form
 		{
 			page = key switch
 			{
-				"recording" => new RecordingPage()
+				"recording" => new RecordingPage(),
+				"library" => new LibraryPage(),
+				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
 			};
 
 			page.Dock = DockStyle.Fill;
@@ -107,6 +119,12 @@ public sealed class MainForm : Form
 
 		_contentPanel.Controls.Clear();
 		_contentPanel.Controls.Add(page);
+		_topBarTitle.Text = GetPageTitle(key);
+	}
+
+	private static string GetPageTitle(string key)
+	{
+		return char.ToUpperInvariant(key[0]) + key[1..];    // Capitalize the first letter of the key for display purposes
 	}
 
 	private Image LoadIcon(string name)
