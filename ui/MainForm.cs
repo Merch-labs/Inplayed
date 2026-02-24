@@ -75,6 +75,7 @@ public sealed class MainForm : Form
 
 		AddSidebarButton("recording", (_, _) => ShowPage("recording"));
 		AddSidebarButton("library", (_, _) => ShowPage("library"));
+		AddSidebarButton("settings", (_, _) => ShowPage("settings"));
 		ShowPage("recording");
 	}
 
@@ -110,6 +111,7 @@ public sealed class MainForm : Form
 			{
 				"recording" => new RecordingPage(),
 				"library" => new LibraryPage(),
+				"settings" => new SettingsPage(),
 				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
 			};
 
