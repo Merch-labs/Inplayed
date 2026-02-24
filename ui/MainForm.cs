@@ -64,8 +64,8 @@ public sealed class MainForm : Form
 		Controls.Add(_bodyPanel);
 		Controls.Add(_sidebarPanel);
 
-		AddSidebarButton("home", (_, _) => ShowPage("home"));
-		ShowPage("home");
+		AddSidebarButton("recording", (_, _) => ShowPage("recording"));
+		ShowPage("recording");
 	}
 
 	public Button AddSidebarButton(string name, EventHandler? onClick = null)
@@ -98,7 +98,7 @@ public sealed class MainForm : Form
 		{
 			page = key switch
 			{
-				"home" => new HomePage()
+				"recording" => new RecordingPage()
 			};
 
 			page.Dock = DockStyle.Fill;
