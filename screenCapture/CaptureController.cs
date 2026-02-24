@@ -1,6 +1,6 @@
 namespace inplayed;
 
-public class Backend
+public class CaptureController
 {
 	private readonly object _sync = new();
 	private ClipSession? _session;
