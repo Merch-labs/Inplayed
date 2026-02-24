@@ -132,7 +132,7 @@ public sealed class MainForm : Form
 	private Image LoadIcon(string name)
 	{
 		string basePath = Path.Combine(AppContext.BaseDirectory, "ui", "icons");
-		string requestedPath = Path.Combine(basePath, "/{name}.png");
+		string requestedPath = Path.Combine(basePath, $"/{name}.png");
 		string defaultPath = Path.Combine(basePath, "place-holder.png");
 
 		string path = File.Exists(requestedPath) ? requestedPath : defaultPath;
