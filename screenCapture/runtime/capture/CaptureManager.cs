@@ -1,5 +1,8 @@
 using System.Threading.Channels;
 using System.Threading;
+using System.Drawing;
+using System.Drawing.Imaging;
+using Vortice.Direct3D11;
 
 public sealed class CaptureManager : IDisposable
 {
@@ -14,6 +17,14 @@ public sealed class CaptureManager : IDisposable
 	private long _enqueuedFrames;
 	private long _encodedFrames;
 	private long _droppedFrames;
+	private ID3D11Texture2D? _previewStaging;
+	private int _previewWidth;
+	private int _previewHeight;
+	private nint _previewDevicePtr;
+	private long _lastPreviewTimestampMs;
+	private const long PreviewIntervalMs = 33;
+
+	public event Action<Bitmap>? PreviewFrameReady;
 
 	public CaptureManager(ICaptureSource source, IHardwareEncoder encoder, int queueSize = 4)
 	{
@@ -116,6 +127,7 @@ public sealed class CaptureManager : IDisposable
 				{
 					try
 					{
+						TryEmitPreview(frame);
 						_encoder.Encode(frame);
 						Interlocked.Increment(ref _encodedFrames);
 					}
@@ -151,7 +163,111 @@ public sealed class CaptureManager : IDisposable
 	public void Dispose()
 	{
 		StopAsync().GetAwaiter().GetResult();
+		_previewStaging?.Dispose();
+		_previewStaging = null;
 		_source.Dispose();
 		_encoder.Dispose();
+	}
+
+	private void TryEmitPreview(TextureFrameRef frame)
+	{
+		var now = Environment.TickCount64;
+		if (now - Interlocked.Read(ref _lastPreviewTimestampMs) < PreviewIntervalMs)
+		{
+			return;
+		}
+
+		using var sourceDevice = frame.Texture.Device;
+		if (sourceDevice == null)
+		{
+			return;
+		}
+
+		using var sourceContext = sourceDevice.ImmediateContext;
+		if (sourceContext == null)
+		{
+			return;
+		}
+
+		EnsurePreviewStaging(frame.Width, frame.Height, frame.Texture, sourceDevice);
+		if (_previewStaging == null)
+		{
+			return;
+		}
+
+		sourceContext.CopyResource(_previewStaging, frame.Texture);
+		var dataBox = sourceContext.Map(_previewStaging, 0, MapMode.Read, MapFlags.None);
+		try
+		{
+			var width = frame.Width;
+			var height = frame.Height;
+			var rowBytes = width * 4;
+			var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+			var rect = new Rectangle(0, 0, width, height);
+			var bmpData = bitmap.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+			try
+			{
+				for (var y = 0; y < height; y++)
+				{
+					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
+					var dst = IntPtr.Add(bmpData.Scan0, y * bmpData.Stride);
+					System.Runtime.InteropServices.Marshal.Copy(src, _copyBuffer, 0, rowBytes);
+					System.Runtime.InteropServices.Marshal.Copy(_copyBuffer, 0, dst, rowBytes);
+				}
+			}
+			finally
+			{
+				bitmap.UnlockBits(bmpData);
+			}
+
+			Interlocked.Exchange(ref _lastPreviewTimestampMs, now);
+			var handler = PreviewFrameReady;
+			if (handler != null)
+			{
+				handler(bitmap);
+			}
+			else
+			{
+				bitmap.Dispose();
+			}
+		}
+		finally
+		{
+			sourceContext.Unmap(_previewStaging, 0);
+		}
+	}
+
+	private byte[] _copyBuffer = Array.Empty<byte>();
+
+	private void EnsurePreviewStaging(int width, int height, ID3D11Texture2D sourceTexture, ID3D11Device sourceDevice)
+	{
+		var neededBytes = width * 4;
+		if (_copyBuffer.Length < neededBytes)
+		{
+			_copyBuffer = new byte[neededBytes];
+		}
+
+		if (_previewStaging != null &&
+			width == _previewWidth &&
+			height == _previewHeight &&
+			_previewDevicePtr == sourceDevice.NativePointer)
+		{
+			return;
+		}
+
+		_previewStaging?.Dispose();
+		_previewStaging = null;
+		var desc = sourceTexture.Description;
+		desc.Usage = ResourceUsage.Staging;
+		desc.BindFlags = BindFlags.None;
+		desc.CPUAccessFlags = CpuAccessFlags.Read;
+		desc.MiscFlags = ResourceOptionFlags.None;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+
+		_previewStaging = sourceDevice.CreateTexture2D(desc);
+		_previewWidth = width;
+		_previewHeight = height;
+		_previewDevicePtr = sourceDevice.NativePointer;
 	}
 }

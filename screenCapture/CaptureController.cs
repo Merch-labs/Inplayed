@@ -1,15 +1,21 @@
+using System.Drawing;
+using System.Windows.Forms;
+
 namespace inplayed;
 
-public class CaptureController
+public sealed class CaptureController : IDisposable
 {
 	private readonly object _sync = new();
 	private ClipSession? _session;
 	private string _lastSessionStatus = "stopped";
 	private readonly AudioRecorder _micRecorder = new();
 	private readonly AudioRecorder _systemRecorder = new();
+	private bool _disposed;
+	private Bitmap? _latestPreviewFrame;
 
 	public Task StartCapture()
 	{
+		ThrowIfDisposed();
 		lock (_sync)
 		{
 			if (_session != null)
@@ -20,8 +26,38 @@ public class CaptureController
 			var settings = CreateDefaultSettings();
 			var session = new ClipSession(settings);
 			session.StatusChanged += OnSessionStatusChanged;
+			session.PreviewFrameReady += OnPreviewFrameReady;
 			StartAudioRecording(settings.ClipSeconds);
 			return StartSessionAsync(session);
+		}
+	}
+
+	public Bitmap? GetPreviewFrame(int maxWidth, int maxHeight)
+	{
+		if (_disposed)
+		{
+			return null;
+		}
+
+		lock (_sync)
+		{
+			if (_latestPreviewFrame == null)
+			{
+				return null;
+			}
+
+			var widthLimit = Math.Max(1, maxWidth);
+			var heightLimit = Math.Max(1, maxHeight);
+			var scale = Math.Min((double)widthLimit / _latestPreviewFrame.Width, (double)heightLimit / _latestPreviewFrame.Height);
+			scale = Math.Min(1.0, scale);
+
+			var outWidth = Math.Max(1, (int)Math.Round(_latestPreviewFrame.Width * scale));
+			var outHeight = Math.Max(1, (int)Math.Round(_latestPreviewFrame.Height * scale));
+
+			var preview = new Bitmap(outWidth, outHeight);
+			using var scaled = Graphics.FromImage(preview);
+			scaled.DrawImage(_latestPreviewFrame, 0, 0, outWidth, outHeight);
+			return preview;
 		}
 	}
 
@@ -38,6 +74,7 @@ public class CaptureController
 		catch
 		{
 			session.StatusChanged -= OnSessionStatusChanged;
+			session.PreviewFrameReady -= OnPreviewFrameReady;
 			session.Dispose();
 			await StopAudioRecording();
 			throw;
@@ -46,6 +83,11 @@ public class CaptureController
 
 	public async Task StopCapture()
 	{
+		if (_disposed)
+		{
+			return;
+		}
+
 		ClipSession? session;
 		lock (_sync)
 		{
@@ -59,7 +101,14 @@ public class CaptureController
 		{
 			await session.StopAsync();
 			session.StatusChanged -= OnSessionStatusChanged;
+			session.PreviewFrameReady -= OnPreviewFrameReady;
 			session.Dispose();
+		}
+
+		lock (_sync)
+		{
+			_latestPreviewFrame?.Dispose();
+			_latestPreviewFrame = null;
 		}
 	}
 
@@ -92,6 +141,7 @@ public class CaptureController
 
 	public Task StartAudioRecording(int clipSeconds)
 	{
+		ThrowIfDisposed();
 		_micRecorder.StartMic(clipSeconds);
 		_systemRecorder.StartSystem(clipSeconds);
 
@@ -184,5 +234,47 @@ public class CaptureController
 		}
 
 		Console.WriteLine($"Session status: {status}");
+	}
+
+	private void OnPreviewFrameReady(Bitmap frame)
+	{
+		lock (_sync)
+		{
+			_latestPreviewFrame?.Dispose();
+			_latestPreviewFrame = frame;
+		}
+	}
+
+	public void Dispose()
+	{
+		if (_disposed)
+		{
+			return;
+		}
+
+		try
+		{
+			StopCapture().GetAwaiter().GetResult();
+		}
+		catch
+		{
+		}
+
+		_micRecorder.Dispose();
+		_systemRecorder.Dispose();
+		lock (_sync)
+		{
+			_latestPreviewFrame?.Dispose();
+			_latestPreviewFrame = null;
+		}
+		_disposed = true;
+	}
+
+	private void ThrowIfDisposed()
+	{
+		if (_disposed)
+		{
+			throw new ObjectDisposedException(nameof(CaptureController));
+		}
 	}
 }

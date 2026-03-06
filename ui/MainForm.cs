@@ -5,6 +5,7 @@ namespace inplayed;
 
 public sealed class MainForm : Form
 {
+	private readonly CaptureController _captureController = new();
 	private readonly Panel _topBarPanel;
 	private readonly Label _topBarTitle;
 	private readonly Panel _bodyPanel;
@@ -109,7 +110,7 @@ public sealed class MainForm : Form
 		{
 			page = key switch
 			{
-				"recording" => new RecordingPage(),
+				"recording" => new RecordingPage(_captureController),
 				"library" => new LibraryPage(),
 				"settings" => new SettingsPage(),
 				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
@@ -132,7 +133,7 @@ public sealed class MainForm : Form
 	private Image LoadIcon(string name)
 	{
 		string basePath = Path.Combine(AppContext.BaseDirectory, "ui", "icons");
-		string requestedPath = Path.Combine(basePath, $"/{name}.png");
+		string requestedPath = Path.Combine(basePath, $"{name}.png");
 		string defaultPath = Path.Combine(basePath, "place-holder.png");
 
 		string path = File.Exists(requestedPath) ? requestedPath : defaultPath;
@@ -141,5 +142,15 @@ public sealed class MainForm : Form
 		{
 			return Image.FromStream(fs);
 		}
+	}
+
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			_captureController.Dispose();
+		}
+
+		base.Dispose(disposing);
 	}
 }
