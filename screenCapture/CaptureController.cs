@@ -145,6 +145,7 @@ public sealed class CaptureController : IDisposable
 
 	public async Task SaveClip()
 	{
+		var saveTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 		ClipSession? session;
 		lock (_sync)
 		{
@@ -158,14 +159,14 @@ public sealed class CaptureController : IDisposable
 
 		var outputPath = GetDefaultClipPath();
 		var tempVideoPath = GetTemporaryVideoPath(outputPath);
-		await session.SaveClipAsync(tempVideoPath);
+		await session.SaveClipAsync(tempVideoPath, saveTimestampMs);
 		if (!System.IO.File.Exists(tempVideoPath))
 		{
 			OnSessionStatusChanged("save_failed:no_video_file");
 			return;
 		}
 
-		var (micPath, systemPath) = SaveAudioClip(outputPath);
+		var (micPath, systemPath) = SaveAudioClip(outputPath, saveTimestampMs);
 		try
 		{
 			if (!string.IsNullOrWhiteSpace(micPath) || !string.IsNullOrWhiteSpace(systemPath))
@@ -188,15 +189,15 @@ public sealed class CaptureController : IDisposable
 		}
 	}
 
-	private (string? MicPath, string? SystemPath) SaveAudioClip(string outputPath)
+	private (string? MicPath, string? SystemPath) SaveAudioClip(string outputPath, long endTimestampMs)
 	{
 		var appConfig = AppConfig.Load();
 		var baseFolder = GetDefaultMediaFolder();
 		var clipStem = System.IO.Path.GetFileNameWithoutExtension(outputPath);
 		var micPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.mic.wav");
 		var systemPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.system.wav");
-		var savedMicPath = appConfig.Recording.IncludeMicAudio ? _micRecorder.SaveClip(micPath) : null;
-		var savedSystemPath = appConfig.Recording.IncludeSystemAudio ? _systemRecorder.SaveClip(systemPath) : null;
+		var savedMicPath = appConfig.Recording.IncludeMicAudio ? _micRecorder.SaveClip(micPath, endTimestampMs) : null;
+		var savedSystemPath = appConfig.Recording.IncludeSystemAudio ? _systemRecorder.SaveClip(systemPath, endTimestampMs) : null;
 		return (savedMicPath, savedSystemPath);
 	}
 

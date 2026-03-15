@@ -71,14 +71,14 @@ public sealed class AdaptiveHardwareEncoder : IHardwareEncoder
 		return $"inactive;startupErrors={_startupErrors.Count};errors={inactiveErrors}";
 	}
 
-	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
+	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, long? endTimestampMs = null, CancellationToken token = default)
 	{
 		if (_active == null)
 		{
 			return Task.CompletedTask;
 		}
 
-		return _active.FlushRecentAsync(outputPath, clipLength, token);
+		return _active.FlushRecentAsync(outputPath, clipLength, endTimestampMs, token);
 	}
 
 	public void Stop()

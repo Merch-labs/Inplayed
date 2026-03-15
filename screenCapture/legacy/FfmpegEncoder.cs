@@ -30,7 +30,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		}
 	}
 
-	public Task FlushRecentAsync(string path, TimeSpan clipLength)
+	public Task FlushRecentAsync(string path, TimeSpan clipLength, long? endTimestampMs = null)
 	{
 		List<VideoFrame> frames;
 		var fps = Math.Max(1, _settings.Fps);
@@ -44,9 +44,9 @@ public sealed class FfmpegEncoder : IVideoEncoder
 			}
 
 			var all = _frames.ToArray();
-			var latestTimestamp = all[^1].Timestamp;
+			var latestTimestamp = ResolveLatestTimestamp(all, endTimestampMs);
 			var earliest = latestTimestamp - (long)clipLength.TotalMilliseconds;
-			frames = all.Where(f => f.Timestamp >= earliest).ToList();
+			frames = all.Where(f => f.Timestamp >= earliest && f.Timestamp <= latestTimestamp).ToList();
 		}
 
 		if (frames.Count > 1)
@@ -84,6 +84,24 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		}
 
 		return Task.Run(() => WriteWithFfmpeg(path, frames, _settings, fpsOverride));
+	}
+
+	private static long ResolveLatestTimestamp(IReadOnlyList<VideoFrame> frames, long? endTimestampMs)
+	{
+		if (!endTimestampMs.HasValue)
+		{
+			return frames[^1].Timestamp;
+		}
+
+		for (var i = frames.Count - 1; i >= 0; i--)
+		{
+			if (frames[i].Timestamp <= endTimestampMs.Value)
+			{
+				return frames[i].Timestamp;
+			}
+		}
+
+		return frames[^1].Timestamp;
 	}
 
 	public void Dispose() { }

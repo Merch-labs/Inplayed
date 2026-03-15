@@ -183,7 +183,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
+	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, long? endTimestampMs = null, CancellationToken token = default)
 	{
 		EncodedPacketSnapshot snapshot;
 		lock (_gate)
@@ -193,7 +193,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				return Task.CompletedTask;
 			}
 
-			snapshot = _ringBuffer.SnapshotLast(clipLength);
+			snapshot = _ringBuffer.SnapshotWindow(clipLength, endTimestampMs);
 		}
 
 		return _clipWriter.WriteAsync(outputPath, snapshot, clipLength, token);

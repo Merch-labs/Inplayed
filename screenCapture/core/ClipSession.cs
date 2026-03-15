@@ -82,7 +82,7 @@ public sealed class ClipSession : IDisposable
 		PreviewFrameReady?.Invoke(frame);
 	}
 
-	public Task SaveClipAsync(string path)
+	public Task SaveClipAsync(string path, long? endTimestampMs = null)
 	{
 		if (_encoder == null)
 		{
@@ -92,6 +92,7 @@ public sealed class ClipSession : IDisposable
 		return _encoder.FlushRecentAsync(
 			path,
 			TimeSpan.FromSeconds(Settings.ClipSeconds),
+			endTimestampMs,
 			CancellationToken.None);
 	}
 

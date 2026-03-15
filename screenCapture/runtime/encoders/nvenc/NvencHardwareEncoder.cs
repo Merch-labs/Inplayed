@@ -941,7 +941,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, CancellationToken token = default)
+	public Task FlushRecentAsync(string outputPath, TimeSpan clipLength, long? endTimestampMs = null, CancellationToken token = default)
 	{
 		EncodedPacketRingBuffer? ring;
 		var wasRunning = false;
@@ -963,7 +963,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			return Task.CompletedTask;
 		}
 
-		var snapshot = ring.SnapshotLast(clipLength);
+		var snapshot = ring.SnapshotWindow(clipLength, endTimestampMs);
 		if (snapshot.Packets.Count == 0)
 		{
 			if (wasRunning)
@@ -976,7 +976,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 					}
 				}
 
-				snapshot = ring.SnapshotLast(clipLength);
+				snapshot = ring.SnapshotWindow(clipLength, endTimestampMs);
 				if (snapshot.Packets.Count > 0)
 				{
 					Interlocked.Increment(ref _flushRecoveredCount);
@@ -1001,7 +1001,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 					}
 				}
 
-				snapshot = ring.SnapshotLast(clipLength);
+				snapshot = ring.SnapshotWindow(clipLength, endTimestampMs);
 				if (snapshot.Packets.Count > 0)
 				{
 					Interlocked.Increment(ref _flushRecoveredCount);

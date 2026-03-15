@@ -2,5 +2,5 @@ public interface IVideoEncoder : IDisposable
 {
 	void PushFrame(VideoFrame frame);
 
-	Task FlushRecentAsync(string path, TimeSpan clipLength);
+	Task FlushRecentAsync(string path, TimeSpan clipLength, long? endTimestampMs = null);
 }

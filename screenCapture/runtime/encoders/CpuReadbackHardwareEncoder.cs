@@ -101,7 +101,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 		}
 	}
 
-	public Task FlushRecentAsync(string path, TimeSpan clipLength, CancellationToken token = default)
+	public Task FlushRecentAsync(string path, TimeSpan clipLength, long? endTimestampMs = null, CancellationToken token = default)
 	{
 		lock (_gate)
 		{
@@ -110,7 +110,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 				return Task.CompletedTask;
 			}
 
-			return _encoder.FlushRecentAsync(path, clipLength);
+			return _encoder.FlushRecentAsync(path, clipLength, endTimestampMs);
 		}
 	}
 

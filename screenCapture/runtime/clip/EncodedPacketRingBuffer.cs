@@ -34,11 +34,21 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 
 	public EncodedPacketSnapshot SnapshotLast(TimeSpan duration)
 	{
+		return SnapshotWindow(duration, endTimestampMs: null);
+	}
+
+	public EncodedPacketSnapshot SnapshotWindow(TimeSpan duration, long? endTimestampMs)
+	{
 		var keep = duration <= TimeSpan.Zero ? _retention : duration;
 
 		lock (_gate)
 		{
-			var latestTimestampMs = _packets.Last?.Value.TimestampMs ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+			var latestTimestampMs = ResolveSnapshotEndTimestamp(endTimestampMs);
+			if (latestTimestampMs <= 0)
+			{
+				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
+			}
+
 			TrimLocked(latestTimestampMs, _retention);
 
 			var minTimeMs = latestTimestampMs - (long)keep.TotalMilliseconds;
@@ -57,10 +67,20 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 			var list = new List<EncodedPacket>(_packets.Count);
 			for (var node = start; node != null; node = node.Next)
 			{
+				if (node.Value.TimestampMs > latestTimestampMs)
+				{
+					break;
+				}
+
 				list.Add(node.Value.Packet);
 			}
 
-			return new EncodedPacketSnapshot(list);
+			if (list.Count == 0)
+			{
+				return new EncodedPacketSnapshot(Array.Empty<EncodedPacket>());
+			}
+
+			return new EncodedPacketSnapshot(list, start.Value.TimestampMs, latestTimestampMs);
 		}
 	}
 
@@ -170,6 +190,36 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 			_bytes -= removed.Packet.Data.Length;
 			_packets.RemoveFirst();
 		}
+	}
+
+	private long ResolveSnapshotEndTimestamp(long? requestedEndTimestampMs)
+	{
+		if (_packets.Last == null)
+		{
+			return 0;
+		}
+
+		var latestTimestampMs = _packets.Last.Value.TimestampMs;
+		if (!requestedEndTimestampMs.HasValue)
+		{
+			return latestTimestampMs;
+		}
+
+		var targetEndTimestampMs = requestedEndTimestampMs.Value;
+		if (targetEndTimestampMs >= latestTimestampMs)
+		{
+			return latestTimestampMs;
+		}
+
+		for (var node = _packets.Last; node != null; node = node.Previous)
+		{
+			if (node.Value.TimestampMs <= targetEndTimestampMs)
+			{
+				return node.Value.TimestampMs;
+			}
+		}
+
+		return latestTimestampMs;
 	}
 
 	private void TrimBytesLocked()

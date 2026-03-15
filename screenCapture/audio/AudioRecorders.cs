@@ -79,7 +79,7 @@ public sealed class AudioRecorder : IDisposable
 		}
 	}
 
-	public string? SaveClip(string outputPath)
+	public string? SaveClip(string outputPath, long? endTimestampMs = null)
 	{
 		lock (_sync)
 		{
@@ -88,7 +88,12 @@ public sealed class AudioRecorder : IDisposable
 				return null;
 			}
 
-			var data = _ringBuffer.Snapshot();
+			var data = _ringBuffer.Snapshot(endTimestampMs);
+			if (data.Length <= 0)
+			{
+				return null;
+			}
+
 			using var writer = new WaveFileWriter(outputPath, _waveFormat);
 			writer.Write(data, 0, data.Length);
 			writer.Flush();
@@ -114,7 +119,7 @@ public sealed class AudioRecorder : IDisposable
 	{
 		lock (_sync)
 		{
-			_ringBuffer?.Write(e.Buffer, 0, e.BytesRecorded);
+			_ringBuffer?.Write(e.Buffer, 0, e.BytesRecorded, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 		}
 	}
 
@@ -138,12 +143,18 @@ public sealed class AudioRecorder : IDisposable
 internal sealed class AudioRingBuffer
 {
 	private readonly byte[] _buffer;
+	private readonly int _averageBytesPerSecond;
+	private readonly int _blockAlign;
 	private int _writePos;
 	private int _length;
+	private long _firstTimestampMs;
+	private long _lastTimestampMs;
 
-	private AudioRingBuffer(int capacity)
+	private AudioRingBuffer(int capacity, int averageBytesPerSecond, int blockAlign)
 	{
 		_buffer = new byte[capacity];
+		_averageBytesPerSecond = Math.Max(1, averageBytesPerSecond);
+		_blockAlign = Math.Max(1, blockAlign);
 	}
 
 	public int Length => _length;
@@ -152,10 +163,10 @@ internal sealed class AudioRingBuffer
 	{
 		var seconds = Math.Max(1, clipSeconds);
 		var capacity = Math.Max(format.AverageBytesPerSecond * seconds, format.BlockAlign);
-		return new AudioRingBuffer(capacity);
+		return new AudioRingBuffer(capacity, format.AverageBytesPerSecond, format.BlockAlign);
 	}
 
-	public void Write(byte[] data, int offset, int count)
+	public void Write(byte[] data, int offset, int count, long endTimestampMs)
 	{
 		var remaining = count;
 		var srcOffset = offset;
@@ -169,25 +180,85 @@ internal sealed class AudioRingBuffer
 
 			_length = Math.Min(_length + toCopy, _buffer.Length);
 		}
+
+		_lastTimestampMs = endTimestampMs > 0 ? endTimestampMs : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		_firstTimestampMs = _lastTimestampMs - GetDurationMsForBytes(_length);
 	}
 
-	public byte[] Snapshot()
+	public byte[] Snapshot(long? endTimestampMs = null)
 	{
-		var result = new byte[_length];
 		if (_length == 0)
 		{
-			return result;
+			return Array.Empty<byte>();
 		}
 
-		var start = (_writePos - _length + _buffer.Length) % _buffer.Length;
-		var first = Math.Min(_buffer.Length - start, _length);
-		Buffer.BlockCopy(_buffer, start, result, 0, first);
-		if (first < _length)
+		var effectiveEndTimestampMs = ResolveEndTimestamp(endTimestampMs);
+		var startTimestampMs = Math.Max(_firstTimestampMs, effectiveEndTimestampMs - GetDurationMsForBytes(_length));
+		var startTrimBytes = AlignBytesToBlockBoundary(GetBytesForDurationMs(startTimestampMs - _firstTimestampMs));
+		var endTrimBytes = AlignBytesToBlockBoundary(GetBytesForDurationMs(_lastTimestampMs - effectiveEndTimestampMs));
+		var copyLength = Math.Max(0, _length - startTrimBytes - endTrimBytes);
+		if (copyLength <= 0)
 		{
-			Buffer.BlockCopy(_buffer, 0, result, first, _length - first);
+			return Array.Empty<byte>();
+		}
+
+		var result = new byte[copyLength];
+		var start = (_writePos - _length + _buffer.Length) % _buffer.Length;
+		var absoluteStart = (start + startTrimBytes) % _buffer.Length;
+		var first = Math.Min(_buffer.Length - absoluteStart, copyLength);
+		Buffer.BlockCopy(_buffer, absoluteStart, result, 0, first);
+		if (first < copyLength)
+		{
+			Buffer.BlockCopy(_buffer, 0, result, first, copyLength - first);
 		}
 
 		return result;
+	}
+
+	private long ResolveEndTimestamp(long? requestedEndTimestampMs)
+	{
+		if (_lastTimestampMs <= 0)
+		{
+			return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		}
+
+		if (!requestedEndTimestampMs.HasValue)
+		{
+			return _lastTimestampMs;
+		}
+
+		return Math.Min(requestedEndTimestampMs.Value, _lastTimestampMs);
+	}
+
+	private long GetDurationMsForBytes(int byteCount)
+	{
+		if (byteCount <= 0)
+		{
+			return 0;
+		}
+
+		return (long)Math.Round(byteCount * 1000.0 / _averageBytesPerSecond);
+	}
+
+	private int GetBytesForDurationMs(long durationMs)
+	{
+		if (durationMs <= 0)
+		{
+			return 0;
+		}
+
+		var bytes = (int)Math.Round(durationMs * _averageBytesPerSecond / 1000.0);
+		return Math.Min(bytes, _length);
+	}
+
+	private int AlignBytesToBlockBoundary(int byteCount)
+	{
+		if (byteCount <= 0)
+		{
+			return 0;
+		}
+
+		return Math.Min(byteCount - (byteCount % _blockAlign), _length);
 	}
 
 	private static void _srcAdvance(ref int offset, ref int remaining, int copied)

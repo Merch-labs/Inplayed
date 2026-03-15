@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Drawing;
 using inplayed;
+using NAudio.Wave;
 
 public sealed class RecordingPipelineTests
 {
@@ -357,6 +358,40 @@ public sealed class RecordingPipelineTests
 		Assert.Single(snapshot.Packets);
 		Assert.True(snapshot.Packets[0].IsKeyFrame);
 		Assert.Equal(0x03, snapshot.Packets[0].Data.Span[^1]);
+	}
+
+	[Fact]
+	public void RingBuffer_SnapshotWindow_UsesRequestedEndTimestamp()
+	{
+		var ring = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(10));
+
+		ring.Append(new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x65, 0x01 }, 1000, 1000, true));
+		ring.Append(new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x02 }, 1500, 1500, false));
+		ring.Append(new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x03 }, 2000, 2000, false));
+
+		var snapshot = ring.SnapshotWindow(TimeSpan.FromMilliseconds(700), endTimestampMs: 1700);
+
+		Assert.Equal(2, snapshot.Packets.Count);
+		Assert.Equal(1000, snapshot.StartTimestampMs);
+		Assert.Equal(1500, snapshot.EndTimestampMs);
+		Assert.Equal(0x02, snapshot.Packets[^1].Data.Span[^1]);
+	}
+
+	[Fact]
+	public void AudioRingBuffer_Snapshot_TrimsDataAfterRequestedEndTimestamp()
+	{
+		var format = new WaveFormat(1000, 16, 1);
+		var ring = AudioRingBuffer.Create(format, clipSeconds: 2);
+
+		ring.Write(Enumerable.Repeat((byte)0x11, 200).ToArray(), 0, 200, endTimestampMs: 1000);
+		ring.Write(Enumerable.Repeat((byte)0x22, 200).ToArray(), 0, 200, endTimestampMs: 1100);
+		ring.Write(Enumerable.Repeat((byte)0x33, 200).ToArray(), 0, 200, endTimestampMs: 1200);
+
+		var snapshot = ring.Snapshot(endTimestampMs: 1100);
+
+		Assert.Equal(400, snapshot.Length);
+		Assert.All(snapshot.Take(200), b => Assert.Equal(0x11, b));
+		Assert.All(snapshot.Skip(200).Take(200), b => Assert.Equal(0x22, b));
 	}
 
 	private static int GetNalType(ReadOnlySpan<byte> data)
