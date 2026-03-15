@@ -129,9 +129,9 @@ public sealed class CaptureManager : IDisposable
 				{
 					try
 					{
-						TryEmitPreview(frame);
 						_encoder.Encode(frame);
 						Interlocked.Increment(ref _encodedFrames);
+						TryEmitPreview(frame);
 					}
 					catch
 					{
