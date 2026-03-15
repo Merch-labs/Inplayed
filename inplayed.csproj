@@ -16,7 +16,26 @@
   </ItemGroup>
 
   <ItemGroup>
-  <Content Include="ui\**\*">
+    <Compile Remove="bin\**\*.cs" />
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="artifacts\**\*.cs" />
+    <Compile Remove="inplayed.Tests\**\*.cs" />
+    <EmbeddedResource Remove="bin\**\*" />
+    <EmbeddedResource Remove="obj\**\*" />
+    <EmbeddedResource Remove="artifacts\**\*" />
+    <EmbeddedResource Remove="inplayed.Tests\**\*" />
+    <None Remove="bin\**\*" />
+    <None Remove="obj\**\*" />
+    <None Remove="artifacts\**\*" />
+    <None Remove="inplayed.Tests\**\*" />
+    <Page Remove="bin\**\*" />
+    <Page Remove="obj\**\*" />
+    <Page Remove="artifacts\**\*" />
+    <Page Remove="inplayed.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+  <Content Include="ui\icons\**\*">
     <CopyToOutputDirectory>Always</CopyToOutputDirectory>
   </Content>
   <Content Include="config\inplayed.config.json">

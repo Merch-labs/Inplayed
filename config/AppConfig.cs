@@ -5,9 +5,13 @@ namespace inplayed;
 internal sealed class AppConfig
 {
 	public bool? NativeNvencEnabled { get; init; }
-	public HotkeyConfig SaveClipHotkey { get; init; } = new HotkeyConfig();
+	public HotkeyConfig SaveClipHotkey { get; init; } = new();
+	public RecordingConfig Recording { get; init; } = new();
 
 	public static AppConfig Load() => AppConfigStorage.Load();
+	public static AppConfig CreateDefault() => AppConfigStorage.CreateDefault();
+	public static void Save(AppConfig config) => AppConfigStorage.Save(config);
+	public static string GetConfigPath() => AppConfigStorage.GetConfigPath();
 
 	public (ModifierKeys Modifiers, Key Key) GetSaveClipHotkey()
 	{
@@ -44,5 +48,28 @@ internal sealed class AppConfig
 		}
 
 		return Enum.TryParse(value, true, out Key parsed) ? parsed : Key.F;
+	}
+
+	internal sealed class HotkeyConfig
+	{
+		public string Modifiers { get; init; } = "Alt";
+		public string Key { get; init; } = "F";
+	}
+
+	internal sealed class RecordingConfig
+	{
+		public int Fps { get; init; } = 60;
+		public int BitrateMbps { get; init; } = 12;
+		public int ClipSeconds { get; init; } = 20;
+		public bool IncludeMicAudio { get; init; } = true;
+		public bool IncludeSystemAudio { get; init; } = true;
+		public CaptureTargetConfig CaptureTarget { get; init; } = new();
+	}
+
+	internal sealed class CaptureTargetConfig
+	{
+		public string Mode { get; init; } = CaptureTargetModes.PrimaryMonitor;
+		public int MonitorIndex { get; init; }
+		public string ExecutablePath { get; init; } = string.Empty;
 	}
 }

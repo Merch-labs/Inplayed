@@ -5,6 +5,26 @@ using System.Windows.Forms;
 
 public static class ActiveTargetResolver
 {
+	public static int GetPrimaryMonitorIndex()
+	{
+		var primary = Screen.PrimaryScreen;
+		var screens = Screen.AllScreens;
+		if (primary == null)
+		{
+			return 0;
+		}
+
+		for (var i = 0; i < screens.Length; i++)
+		{
+			if (screens[i].DeviceName == primary.DeviceName)
+			{
+				return i;
+			}
+		}
+
+		return 0;
+	}
+
 	public static int GetActiveMonitorIndex()
 	{
 		var hwnd = GetForegroundWindow();
@@ -72,6 +92,36 @@ public static class ActiveTargetResolver
 		return IntPtr.Zero;
 	}
 
+	public static Rectangle GetWindowBounds(IntPtr hwnd)
+	{
+		if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var rect))
+		{
+			return Rectangle.Empty;
+		}
+
+		var width = rect.Right - rect.Left;
+		var height = rect.Bottom - rect.Top;
+		if (width <= 0 || height <= 0)
+		{
+			return Rectangle.Empty;
+		}
+
+		return new Rectangle(rect.Left, rect.Top, width, height);
+	}
+
 	[DllImport("user32.dll")]
 	private static extern IntPtr GetForegroundWindow();
+
+	[DllImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+	[StructLayout(LayoutKind.Sequential)]
+	private struct RECT
+	{
+		public int Left;
+		public int Top;
+		public int Right;
+		public int Bottom;
+	}
 }

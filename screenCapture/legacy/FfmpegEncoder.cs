@@ -107,7 +107,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 		var fps = Math.Max(1.0, fpsOverride ?? settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
-		var ffmpegPath = FfmpegPathResolver.Resolve();
+		var ffmpegPath = FfmpegPathResolver.ResolvePath();
 		var args =
 			$"-y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
 			$"-i - -c:v {_videoCodec} -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";

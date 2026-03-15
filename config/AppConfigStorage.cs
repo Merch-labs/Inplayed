@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.IO;
+using System.Text.Json;
 
 namespace inplayed;
 
@@ -8,10 +8,24 @@ internal static class AppConfigStorage
 	private static readonly AppConfig Default = new()
 	{
 		NativeNvencEnabled = true,
-		SaveClipHotkey = new HotkeyConfig
+		SaveClipHotkey = new AppConfig.HotkeyConfig
 		{
 			Modifiers = "Alt",
 			Key = "F"
+		},
+		Recording = new AppConfig.RecordingConfig
+		{
+			Fps = 60,
+			BitrateMbps = 12,
+			ClipSeconds = 20,
+			IncludeMicAudio = true,
+			IncludeSystemAudio = true,
+			CaptureTarget = new AppConfig.CaptureTargetConfig
+			{
+				Mode = CaptureTargetModes.PrimaryMonitor,
+				MonitorIndex = 0,
+				ExecutablePath = string.Empty
+			}
 		}
 	};
 
@@ -19,7 +33,6 @@ internal static class AppConfigStorage
 	{
 		var path = ResolveConfigPath();
 
-		// One read attempt first if invalid/corrupt/missing fields write defaults and retry.
 		for (var attempt = 0; attempt < 2; attempt++)
 		{
 			if (TryRead(path, out var config))
@@ -31,6 +44,43 @@ internal static class AppConfigStorage
 		}
 
 		return Default;
+	}
+
+	public static AppConfig CreateDefault()
+	{
+		return new AppConfig
+		{
+			NativeNvencEnabled = Default.NativeNvencEnabled,
+			SaveClipHotkey = new AppConfig.HotkeyConfig
+			{
+				Modifiers = Default.SaveClipHotkey.Modifiers,
+				Key = Default.SaveClipHotkey.Key
+			},
+			Recording = new AppConfig.RecordingConfig
+			{
+				Fps = Default.Recording.Fps,
+				BitrateMbps = Default.Recording.BitrateMbps,
+				ClipSeconds = Default.Recording.ClipSeconds,
+				IncludeMicAudio = Default.Recording.IncludeMicAudio,
+				IncludeSystemAudio = Default.Recording.IncludeSystemAudio,
+				CaptureTarget = new AppConfig.CaptureTargetConfig
+				{
+					Mode = Default.Recording.CaptureTarget.Mode,
+					MonitorIndex = Default.Recording.CaptureTarget.MonitorIndex,
+					ExecutablePath = Default.Recording.CaptureTarget.ExecutablePath
+				}
+			}
+		};
+	}
+
+	public static void Save(AppConfig config)
+	{
+		TryWrite(ResolveConfigPath(), config);
+	}
+
+	public static string GetConfigPath()
+	{
+		return ResolveConfigPath();
 	}
 
 	private static bool TryRead(string path, out AppConfig config)
@@ -58,24 +108,52 @@ internal static class AppConfigStorage
 				return false;
 			}
 
+			if (!root.TryGetProperty("recording", out var recording) || recording.ValueKind != JsonValueKind.Object)
+			{
+				return false;
+			}
+
 			if (!hotkeys.TryGetProperty("saveClip", out var saveClip) || saveClip.ValueKind != JsonValueKind.Object)
 			{
 				return false;
 			}
 
-			if (!saveClip.TryGetProperty("modifiers", out var modifiersElement) || modifiersElement.ValueKind != JsonValueKind.String)
+			if (!TryReadString(saveClip, "modifiers", out var modifiers) || string.IsNullOrWhiteSpace(modifiers))
 			{
 				return false;
 			}
 
-			if (!saveClip.TryGetProperty("key", out var keyElement) || keyElement.ValueKind != JsonValueKind.String)
+			if (!TryReadString(saveClip, "key", out var key) || string.IsNullOrWhiteSpace(key))
 			{
 				return false;
 			}
 
-			var modifiers = modifiersElement.GetString();
-			var key = keyElement.GetString();
-			if (string.IsNullOrWhiteSpace(modifiers) || string.IsNullOrWhiteSpace(key))
+			if (!TryReadInt(recording, "fps", 24, 240, out var fps))
+			{
+				return false;
+			}
+
+			if (!TryReadInt(recording, "bitrateMbps", 1, 200, out var bitrateMbps))
+			{
+				return false;
+			}
+
+			if (!TryReadInt(recording, "clipSeconds", 5, 300, out var clipSeconds))
+			{
+				return false;
+			}
+
+			if (!TryReadBool(recording, "includeMicAudio", out var includeMicAudio))
+			{
+				return false;
+			}
+
+			if (!TryReadBool(recording, "includeSystemAudio", out var includeSystemAudio))
+			{
+				return false;
+			}
+
+			if (!TryReadCaptureTarget(recording, out var captureTarget))
 			{
 				return false;
 			}
@@ -83,10 +161,19 @@ internal static class AppConfigStorage
 			config = new AppConfig
 			{
 				NativeNvencEnabled = nativeNvencElement.GetBoolean(),
-				SaveClipHotkey = new HotkeyConfig
+				SaveClipHotkey = new AppConfig.HotkeyConfig
 				{
 					Modifiers = modifiers,
 					Key = key
+				},
+				Recording = new AppConfig.RecordingConfig
+				{
+					Fps = fps,
+					BitrateMbps = bitrateMbps,
+					ClipSeconds = clipSeconds,
+					IncludeMicAudio = includeMicAudio,
+					IncludeSystemAudio = includeSystemAudio,
+					CaptureTarget = captureTarget
 				}
 			};
 			return true;
@@ -120,13 +207,108 @@ internal static class AppConfigStorage
 			writer.WriteString("key", config.SaveClipHotkey.Key);
 			writer.WriteEndObject();
 			writer.WriteEndObject();
+
+			writer.WriteStartObject("recording");
+			writer.WriteNumber("fps", config.Recording.Fps);
+			writer.WriteNumber("bitrateMbps", config.Recording.BitrateMbps);
+			writer.WriteNumber("clipSeconds", config.Recording.ClipSeconds);
+			writer.WriteBoolean("includeMicAudio", config.Recording.IncludeMicAudio);
+			writer.WriteBoolean("includeSystemAudio", config.Recording.IncludeSystemAudio);
+			writer.WriteStartObject("captureTarget");
+			writer.WriteString("mode", config.Recording.CaptureTarget.Mode);
+			writer.WriteNumber("monitorIndex", config.Recording.CaptureTarget.MonitorIndex);
+			writer.WriteString("executablePath", config.Recording.CaptureTarget.ExecutablePath);
+			writer.WriteEndObject();
+			writer.WriteEndObject();
 			writer.WriteEndObject();
 			writer.Flush();
 		}
 		catch
 		{
-			// Keep runtime defaults if file cannot be written.
 		}
+	}
+
+	private static bool TryReadBool(JsonElement parent, string propertyName, out bool value)
+	{
+		value = false;
+		if (!parent.TryGetProperty(propertyName, out var element))
+		{
+			return false;
+		}
+
+		if (element.ValueKind != JsonValueKind.True && element.ValueKind != JsonValueKind.False)
+		{
+			return false;
+		}
+
+		value = element.GetBoolean();
+		return true;
+	}
+
+	private static bool TryReadCaptureTarget(JsonElement recording, out AppConfig.CaptureTargetConfig captureTarget)
+	{
+		captureTarget = new AppConfig.CaptureTargetConfig();
+		if (!recording.TryGetProperty("captureTarget", out var targetElement) || targetElement.ValueKind != JsonValueKind.Object)
+		{
+			return false;
+		}
+
+		if (!TryReadString(targetElement, "mode", out var mode) || !CaptureTargetModes.IsValid(mode))
+		{
+			return false;
+		}
+
+		if (!TryReadInt(targetElement, "monitorIndex", 0, 32, out var monitorIndex))
+		{
+			return false;
+		}
+
+		if (!TryReadString(targetElement, "executablePath", out var executablePath))
+		{
+			return false;
+		}
+
+		captureTarget = new AppConfig.CaptureTargetConfig
+		{
+			Mode = mode,
+			MonitorIndex = monitorIndex,
+			ExecutablePath = executablePath
+		};
+		return true;
+	}
+
+	private static bool TryReadInt(JsonElement parent, string propertyName, int min, int max, out int value)
+	{
+		value = 0;
+		if (!parent.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.Number)
+		{
+			return false;
+		}
+
+		if (!element.TryGetInt32(out var parsed))
+		{
+			return false;
+		}
+
+		if (parsed < min || parsed > max)
+		{
+			return false;
+		}
+
+		value = parsed;
+		return true;
+	}
+
+	private static bool TryReadString(JsonElement parent, string propertyName, out string value)
+	{
+		value = string.Empty;
+		if (!parent.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.String)
+		{
+			return false;
+		}
+
+		value = element.GetString() ?? string.Empty;
+		return true;
 	}
 
 	private static string ResolveConfigPath()

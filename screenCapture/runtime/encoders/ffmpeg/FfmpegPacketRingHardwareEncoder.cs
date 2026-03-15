@@ -248,7 +248,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	{
 		var fps = Math.Max(1, settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
-		var ffmpegPath = FfmpegPathResolver.Resolve();
+		var ffmpegPath = FfmpegPathResolver.ResolvePath();
 		var codecArgs = BuildCodecArgs(codec, fps, bitrate);
 		var args =
 			$"-hide_banner -loglevel error -y -f rawvideo -pix_fmt bgra -s {width}x{height} -r {fps} " +

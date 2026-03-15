@@ -9,6 +9,7 @@ public sealed class AudioRecorder : IDisposable
 	private WaveFormat? _waveFormat;
 	private AudioRingBuffer? _ringBuffer;
 	private int _clipSeconds;
+	private bool _captureAvailable;
 
 	public string? OutputPath { get; private set; }
 
@@ -30,13 +31,15 @@ public sealed class AudioRecorder : IDisposable
 				_ringBuffer = AudioRingBuffer.Create(_waveFormat, _clipSeconds);
 				_capture.DataAvailable += OnDataAvailable;
 				_capture.RecordingStopped += OnRecordingStopped;
+				_captureAvailable = true;
 				_isRecording = true;
 				_capture.StartRecording();
 			}
 			catch (System.Runtime.InteropServices.COMException)
 			{
 				_isRecording = false;
-				_waveFormat = new WaveFormat(44100, 16, 2);
+				_captureAvailable = false;
+				_waveFormat = null;
 				_ringBuffer = null;
 				OutputPath = null;
 			}
@@ -61,42 +64,36 @@ public sealed class AudioRecorder : IDisposable
 				_ringBuffer = AudioRingBuffer.Create(_waveFormat, _clipSeconds);
 				_capture.DataAvailable += OnDataAvailable;
 				_capture.RecordingStopped += OnRecordingStopped;
+				_captureAvailable = true;
 				_isRecording = true;
 				_capture.StartRecording();
 			}
 			catch (System.Runtime.InteropServices.COMException)
 			{
 				_isRecording = false;
-				_waveFormat = new WaveFormat(44100, 16, 2);
+				_captureAvailable = false;
+				_waveFormat = null;
 				_ringBuffer = null;
 				OutputPath = null;
 			}
 		}
 	}
 
-	public void SaveClip(string outputPath)
+	public string? SaveClip(string outputPath)
 	{
 		lock (_sync)
 		{
-			if (_waveFormat == null)
+			if (_waveFormat == null || !_captureAvailable || _ringBuffer == null || _ringBuffer.Length <= 0)
 			{
-				return;
+				return null;
 			}
 
-			byte[] data;
-			if (_ringBuffer != null && _ringBuffer.Length > 0)
-			{
-				data = _ringBuffer.Snapshot();
-			}
-			else
-			{
-				var length = _waveFormat.AverageBytesPerSecond * Math.Max(1, _clipSeconds);
-				data = new byte[length];
-			}
+			var data = _ringBuffer.Snapshot();
 			using var writer = new WaveFileWriter(outputPath, _waveFormat);
 			writer.Write(data, 0, data.Length);
 			writer.Flush();
 			OutputPath = outputPath;
+			return outputPath;
 		}
 	}
 

@@ -40,6 +40,11 @@ public static class FfmpegPathResolver
 		return "ffmpeg";
 	}
 
+	public static string ResolvePath()
+	{
+		return Resolve();
+	}
+
 	public static string MissingMessage =>
 		"ffmpeg was not found. Run scripts\\download-ffmpeg.ps1, place ffmpeg.exe next to the app, or install ffmpeg on PATH.";
 
