@@ -1,4 +1,3 @@
-using Vortice.Direct3D11;
 using Vortice.DXGI;
 
 internal static class GpuCapabilityProbe
@@ -9,18 +8,47 @@ internal static class GpuCapabilityProbe
 	{
 		try
 		{
-			using var device = D3D11.D3D11CreateDevice(
-				Vortice.Direct3D.DriverType.Hardware,
-				DeviceCreationFlags.BgraSupport,
-				Vortice.Direct3D.FeatureLevel.Level_11_0);
-			using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
-			using var adapter = dxgiDevice.GetAdapter();
-			var desc = adapter.Description;
-			return desc.VendorId == NvidiaVendorId;
+			return ContainsVendorId(EnumerateAdapterVendorIds(), NvidiaVendorId);
 		}
 		catch
 		{
 			return false;
+		}
+	}
+
+	internal static bool ContainsVendorId(IEnumerable<int> vendorIds, int vendorId)
+	{
+		foreach (var currentVendorId in vendorIds)
+		{
+			if (currentVendorId == vendorId)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static IEnumerable<int> EnumerateAdapterVendorIds()
+	{
+		using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
+		if (factory == null)
+		{
+			yield break;
+		}
+
+		for (uint index = 0; ; index++)
+		{
+			var result = factory.EnumAdapters1(index, out var adapter);
+			if (result.Failure || adapter == null)
+			{
+				yield break;
+			}
+
+			using (adapter)
+			{
+				yield return unchecked((int)adapter.Description1.VendorId);
+			}
 		}
 	}
 }

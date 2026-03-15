@@ -285,6 +285,22 @@ public sealed class RecordingPipelineTests
 	}
 
 	[Fact]
+	public void GpuCapabilityProbe_DetectsNvidiaVendorAcrossAnyAdapter()
+	{
+		var hasNvidia = GpuCapabilityProbe.ContainsVendorId(new[] { 0x8086, 0x10DE, 0x1002 }, 0x10DE);
+
+		Assert.True(hasNvidia);
+	}
+
+	[Fact]
+	public void GpuCapabilityProbe_ReturnsFalseWhenVendorIsAbsent()
+	{
+		var hasNvidia = GpuCapabilityProbe.ContainsVendorId(new[] { 0x8086, 0x1002 }, 0x10DE);
+
+		Assert.False(hasNvidia);
+	}
+
+	[Fact]
 	public void Packetizer_EmitsCompletedNals_AndKeepsTailUntilCompleted()
 	{
 		var packetizer = new H264AnnexBPacketizer();
