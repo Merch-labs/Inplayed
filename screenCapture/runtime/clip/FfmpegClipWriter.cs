@@ -27,7 +27,7 @@ public sealed class FfmpegClipWriter : IClipWriter
 		{
 			var defaultClipFps = ResolveClipFps();
 			var clipFps = ResolveClipFps(snapshot, maxDuration, defaultClipFps);
-			var ffmpegPath = ResolveFfmpegPath();
+			var ffmpegPath = FfmpegPathResolver.ResolvePath();
 			var durationArg = string.Empty;
 			if (maxDuration.HasValue && maxDuration.Value > TimeSpan.Zero)
 			{
@@ -208,21 +208,4 @@ public sealed class FfmpegClipWriter : IClipWriter
 		return data[idx] & 0x1F;
 	}
 
-	private static string ResolveFfmpegPath()
-	{
-		var baseDir = AppContext.BaseDirectory;
-		var local = Path.Combine(baseDir, "ffmpeg.exe");
-		if (File.Exists(local))
-		{
-			return local;
-		}
-
-		var tools = Path.Combine(baseDir, "tools", "ffmpeg", "ffmpeg.exe");
-		if (File.Exists(tools))
-		{
-			return tools;
-		}
-
-		return "ffmpeg";
-	}
 }

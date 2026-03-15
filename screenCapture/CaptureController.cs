@@ -6,6 +6,7 @@ namespace inplayed;
 public sealed class CaptureController : IDisposable
 {
 	private readonly object _sync = new();
+	private readonly FfmpegMediaMuxer _mediaMuxer = new();
 	private ClipSession? _session;
 	private string _lastSessionStatus = "stopped";
 	private readonly AudioRecorder _micRecorder = new();
@@ -169,24 +170,46 @@ public sealed class CaptureController : IDisposable
 		}
 
 		var outputPath = GetDefaultClipPath();
-		await session.SaveClipAsync(outputPath);
-		if (!System.IO.File.Exists(outputPath))
+		var tempVideoPath = GetTemporaryVideoPath(outputPath);
+		await session.SaveClipAsync(tempVideoPath);
+		if (!System.IO.File.Exists(tempVideoPath))
 		{
 			OnSessionStatusChanged("save_failed:no_video_file");
 			return;
 		}
 
-		SaveAudioClip();
-		OnSessionStatusChanged($"save_ok:{outputPath}");
+		var (micPath, systemPath) = SaveAudioClip(outputPath);
+		try
+		{
+			if (!string.IsNullOrWhiteSpace(micPath) || !string.IsNullOrWhiteSpace(systemPath))
+			{
+				await _mediaMuxer.MuxAsync(tempVideoPath, outputPath, micPath, systemPath);
+				TryDeleteFile(tempVideoPath);
+				TryDeleteFile(micPath);
+				TryDeleteFile(systemPath);
+				OnSessionStatusChanged($"save_ok:{outputPath}:muxed");
+				return;
+			}
+
+			System.IO.File.Move(tempVideoPath, outputPath, overwrite: true);
+			OnSessionStatusChanged($"save_ok:{outputPath}");
+		}
+		catch (Exception ex)
+		{
+			System.IO.File.Move(tempVideoPath, outputPath, overwrite: true);
+			OnSessionStatusChanged($"save_partial:{outputPath}:audio_mux_failed:{ex.GetType().Name}");
+		}
 	}
 
-	private void SaveAudioClip()
+	private (string? MicPath, string? SystemPath) SaveAudioClip(string outputPath)
 	{
 		var baseFolder = GetDefaultMediaFolder();
-		var micPath = System.IO.Path.Combine(baseFolder, $"audio_mic_clip_{DateTime.Now:yyyyMMdd_HHmmss}.wav");
-		var systemPath = System.IO.Path.Combine(baseFolder, $"audio_system_clip_{DateTime.Now:yyyyMMdd_HHmmss}.wav");
-		_micRecorder.SaveClip(micPath);
-		_systemRecorder.SaveClip(systemPath);
+		var clipStem = System.IO.Path.GetFileNameWithoutExtension(outputPath);
+		var micPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.mic.wav");
+		var systemPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.system.wav");
+		var savedMicPath = _micRecorder.SaveClip(micPath);
+		var savedSystemPath = _systemRecorder.SaveClip(systemPath);
+		return (savedMicPath, savedSystemPath);
 	}
 
 	private static RecordingSettings CreateDefaultSettings()
@@ -217,6 +240,13 @@ public sealed class CaptureController : IDisposable
 		return System.IO.Path.Combine(folder, fileName);
 	}
 
+	private static string GetTemporaryVideoPath(string finalOutputPath)
+	{
+		var folder = System.IO.Path.GetDirectoryName(finalOutputPath) ?? GetDefaultMediaFolder();
+		var stem = System.IO.Path.GetFileNameWithoutExtension(finalOutputPath);
+		return System.IO.Path.Combine(folder, $"{stem}.{Guid.NewGuid():N}.video.tmp.mp4");
+	}
+
 	private static string GetDefaultMediaFolder()
 	{
 		var folder = System.IO.Path.Combine(
@@ -224,6 +254,25 @@ public sealed class CaptureController : IDisposable
 			"inplayed");
 		System.IO.Directory.CreateDirectory(folder);
 		return folder;
+	}
+
+	private static void TryDeleteFile(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+		{
+			return;
+		}
+
+		try
+		{
+			if (System.IO.File.Exists(path))
+			{
+				System.IO.File.Delete(path);
+			}
+		}
+		catch
+		{
+		}
 	}
 
 	private void OnSessionStatusChanged(string status)

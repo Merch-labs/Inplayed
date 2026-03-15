@@ -1,7 +1,87 @@
+using System.IO;
 using System.Linq;
 
 public sealed class RecordingPipelineTests
 {
+	[Fact]
+	public void MediaMuxer_BuildArguments_ReturnsNullWhenNoAudioInputsExist()
+	{
+		var tempDir = CreateTempDirectory();
+		try
+		{
+			var videoPath = Path.Combine(tempDir, "clip.mp4");
+			File.WriteAllBytes(videoPath, new byte[] { 0x01 });
+
+			var args = FfmpegMediaMuxer.BuildArguments(
+				videoPath,
+				Path.Combine(tempDir, "out.mp4"),
+				null,
+				null);
+
+			Assert.Null(args);
+		}
+		finally
+		{
+			Directory.Delete(tempDir, recursive: true);
+		}
+	}
+
+	[Fact]
+	public void MediaMuxer_BuildArguments_UsesDirectAudioMapWhenSingleAudioTrackExists()
+	{
+		var tempDir = CreateTempDirectory();
+		try
+		{
+			var videoPath = Path.Combine(tempDir, "clip.mp4");
+			var micPath = Path.Combine(tempDir, "clip.mic.wav");
+			File.WriteAllBytes(videoPath, new byte[] { 0x01 });
+			File.WriteAllBytes(micPath, new byte[] { 0x02 });
+
+			var args = FfmpegMediaMuxer.BuildArguments(
+				videoPath,
+				Path.Combine(tempDir, "out.mp4"),
+				micPath,
+				null);
+
+			Assert.NotNull(args);
+			Assert.Contains("-map 0:v:0 -map 1:a:0", args);
+			Assert.DoesNotContain("amix", args);
+		}
+		finally
+		{
+			Directory.Delete(tempDir, recursive: true);
+		}
+	}
+
+	[Fact]
+	public void MediaMuxer_BuildArguments_MixesMicAndSystemAudioWhenBothExist()
+	{
+		var tempDir = CreateTempDirectory();
+		try
+		{
+			var videoPath = Path.Combine(tempDir, "clip.mp4");
+			var micPath = Path.Combine(tempDir, "clip.mic.wav");
+			var systemPath = Path.Combine(tempDir, "clip.system.wav");
+			File.WriteAllBytes(videoPath, new byte[] { 0x01 });
+			File.WriteAllBytes(micPath, new byte[] { 0x02 });
+			File.WriteAllBytes(systemPath, new byte[] { 0x03 });
+
+			var args = FfmpegMediaMuxer.BuildArguments(
+				videoPath,
+				Path.Combine(tempDir, "out.mp4"),
+				micPath,
+				systemPath);
+
+			Assert.NotNull(args);
+			Assert.Contains("amix=inputs=2", args);
+			Assert.Contains("-map \"[aout]\"", args);
+		}
+		finally
+		{
+			Directory.Delete(tempDir, recursive: true);
+		}
+	}
+
 	[Fact]
 	public void Packetizer_EmitsCompletedNals_AndKeepsTailUntilCompleted()
 	{
@@ -70,5 +150,12 @@ public sealed class RecordingPipelineTests
 
 		var index = data[2] == 0x01 ? 3 : 4;
 		return data[index] & 0x1F;
+	}
+
+	private static string CreateTempDirectory()
+	{
+		var tempDir = Path.Combine(Path.GetTempPath(), $"inplayed-tests-{Guid.NewGuid():N}");
+		Directory.CreateDirectory(tempDir);
+		return tempDir;
 	}
 }

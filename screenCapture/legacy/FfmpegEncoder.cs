@@ -107,7 +107,7 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 		var fps = Math.Max(1.0, fpsOverride ?? settings.Fps);
 		var bitrate = Math.Max(1, settings.Bitrate);
-		var ffmpegPath = ResolveFfmpegPath();
+		var ffmpegPath = FfmpegPathResolver.ResolvePath();
 		var args =
 			$"-y -f rawvideo -pix_fmt bgra -s {settings.Width}x{settings.Height} -r {fps} " +
 			$"-i - -c:v {_videoCodec} -pix_fmt yuv420p -b:v {bitrate} \"{path}\"";
@@ -156,21 +156,4 @@ public sealed class FfmpegEncoder : IVideoEncoder
 		}
 	}
 
-	private static string ResolveFfmpegPath()
-	{
-		var baseDir = AppContext.BaseDirectory;
-		var local = Path.Combine(baseDir, "ffmpeg.exe");
-		if (File.Exists(local))
-		{
-			return local;
-		}
-
-		var tools = Path.Combine(baseDir, "tools", "ffmpeg", "ffmpeg.exe");
-		if (File.Exists(tools))
-		{
-			return tools;
-		}
-
-		return "ffmpeg";
-	}
 }
