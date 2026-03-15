@@ -258,6 +258,33 @@ public sealed class RecordingPipelineTests
 	}
 
 	[Fact]
+	public void PreviewFrameSizer_LeavesSmallFramesUnchanged()
+	{
+		var (width, height) = PreviewFrameSizer.GetScaledSize(800, 450);
+
+		Assert.Equal(800, width);
+		Assert.Equal(450, height);
+	}
+
+	[Fact]
+	public void PreviewFrameSizer_ScalesLandscapeFramesToMaxDimension()
+	{
+		var (width, height) = PreviewFrameSizer.GetScaledSize(3840, 2160);
+
+		Assert.Equal(960, width);
+		Assert.Equal(540, height);
+	}
+
+	[Fact]
+	public void PreviewFrameSizer_ScalesPortraitFramesToMaxDimension()
+	{
+		var (width, height) = PreviewFrameSizer.GetScaledSize(1440, 2560);
+
+		Assert.Equal(540, width);
+		Assert.Equal(960, height);
+	}
+
+	[Fact]
 	public void Packetizer_EmitsCompletedNals_AndKeepsTailUntilCompleted()
 	{
 		var packetizer = new H264AnnexBPacketizer();

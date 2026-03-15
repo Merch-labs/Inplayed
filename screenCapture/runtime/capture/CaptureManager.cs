@@ -23,6 +23,8 @@ public sealed class CaptureManager : IDisposable
 	private nint _previewDevicePtr;
 	private long _lastPreviewTimestampMs;
 	private const long PreviewIntervalMs = 33;
+	private byte[] _sourcePreviewRowBuffer = Array.Empty<byte>();
+	private byte[] _previewRowBuffer = Array.Empty<byte>();
 
 	public event Action<Bitmap>? PreviewFrameReady;
 
@@ -199,20 +201,24 @@ public sealed class CaptureManager : IDisposable
 		var dataBox = sourceContext.Map(_previewStaging, 0, MapMode.Read, MapFlags.None);
 		try
 		{
-			var width = frame.Width;
-			var height = frame.Height;
-			var rowBytes = width * 4;
-			var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-			var rect = new Rectangle(0, 0, width, height);
+			var sourceWidth = frame.Width;
+			var sourceHeight = frame.Height;
+			var (previewWidth, previewHeight) = PreviewFrameSizer.GetScaledSize(sourceWidth, sourceHeight);
+			var previewRowBytes = previewWidth * 4;
+			var bitmap = new Bitmap(previewWidth, previewHeight, PixelFormat.Format32bppArgb);
+			var rect = new Rectangle(0, 0, previewWidth, previewHeight);
 			var bmpData = bitmap.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
 			try
 			{
-				for (var y = 0; y < height; y++)
+				for (var y = 0; y < previewHeight; y++)
 				{
-					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
+					var sourceY = previewHeight == sourceHeight
+						? y
+						: (int)((long)y * sourceHeight / previewHeight);
+					var src = IntPtr.Add(dataBox.DataPointer, (int)(sourceY * dataBox.RowPitch));
 					var dst = IntPtr.Add(bmpData.Scan0, y * bmpData.Stride);
-					System.Runtime.InteropServices.Marshal.Copy(src, _copyBuffer, 0, rowBytes);
-					System.Runtime.InteropServices.Marshal.Copy(_copyBuffer, 0, dst, rowBytes);
+					CopyPreviewRow(src, sourceWidth, previewWidth, previewRowBytes);
+					System.Runtime.InteropServices.Marshal.Copy(_previewRowBuffer, 0, dst, previewRowBytes);
 				}
 			}
 			finally
@@ -237,15 +243,9 @@ public sealed class CaptureManager : IDisposable
 		}
 	}
 
-	private byte[] _copyBuffer = Array.Empty<byte>();
-
 	private void EnsurePreviewStaging(int width, int height, ID3D11Texture2D sourceTexture, ID3D11Device sourceDevice)
 	{
-		var neededBytes = width * 4;
-		if (_copyBuffer.Length < neededBytes)
-		{
-			_copyBuffer = new byte[neededBytes];
-		}
+		EnsurePreviewBuffers(width, height);
 
 		if (_previewStaging != null &&
 			width == _previewWidth &&
@@ -269,5 +269,37 @@ public sealed class CaptureManager : IDisposable
 		_previewWidth = width;
 		_previewHeight = height;
 		_previewDevicePtr = sourceDevice.NativePointer;
+	}
+
+	private void EnsurePreviewBuffers(int sourceWidth, int sourceHeight)
+	{
+		var sourceRowBytes = sourceWidth * 4;
+		if (_sourcePreviewRowBuffer.Length < sourceRowBytes)
+		{
+			_sourcePreviewRowBuffer = new byte[sourceRowBytes];
+		}
+
+		var (previewWidth, _) = PreviewFrameSizer.GetScaledSize(sourceWidth, sourceHeight);
+		var previewRowBytes = previewWidth * 4;
+		if (_previewRowBuffer.Length < previewRowBytes)
+		{
+			_previewRowBuffer = new byte[previewRowBytes];
+		}
+	}
+
+	private void CopyPreviewRow(IntPtr sourceRow, int sourceWidth, int previewWidth, int previewRowBytes)
+	{
+		if (previewWidth == sourceWidth)
+		{
+			System.Runtime.InteropServices.Marshal.Copy(sourceRow, _previewRowBuffer, 0, previewRowBytes);
+			return;
+		}
+
+		System.Runtime.InteropServices.Marshal.Copy(sourceRow, _sourcePreviewRowBuffer, 0, sourceWidth * 4);
+		for (var x = 0; x < previewWidth; x++)
+		{
+			var sourceX = (int)((long)x * sourceWidth / previewWidth);
+			Buffer.BlockCopy(_sourcePreviewRowBuffer, sourceX * 4, _previewRowBuffer, x * 4, 4);
+		}
 	}
 }

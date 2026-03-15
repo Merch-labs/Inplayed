@@ -1232,6 +1232,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			Fps = settings.Fps,
 			Bitrate = settings.Bitrate,
 			ClipSeconds = settings.ClipSeconds,
+			UseNativeNvenc = settings.UseNativeNvenc,
 			Target = settings.Target
 		};
 	}
