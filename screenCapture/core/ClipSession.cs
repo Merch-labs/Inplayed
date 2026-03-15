@@ -56,23 +56,36 @@ public sealed class ClipSession : IDisposable
 
 	public async Task StopAsync()
 	{
+		await StopAsync(preserveClipBuffer: false);
+	}
+
+	public async Task StopAsync(bool preserveClipBuffer)
+	{
 		_cts?.Cancel();
 
 		if (_captureManager != null)
 		{
 			_captureManager.PreviewFrameReady -= OnPreviewFrameReady;
 			await _captureManager.StopAsync();
-			_captureManager.Dispose();
+			_captureManager.DisposeResources(disposeEncoder: !preserveClipBuffer);
 			_captureManager = null;
 		}
 		else
 		{
 			_captureSource?.Dispose();
-			_encoder?.Dispose();
+			if (!preserveClipBuffer)
+			{
+				_encoder?.Dispose();
+				_encoder = null;
+			}
 		}
 
 		_captureSource = null;
-		_encoder = null;
+		if (!preserveClipBuffer)
+		{
+			_encoder = null;
+		}
+
 		_cts?.Dispose();
 		_cts = null;
 
@@ -118,6 +131,6 @@ public sealed class ClipSession : IDisposable
 
 	public void Dispose()
 	{
-		StopAsync().GetAwaiter().GetResult();
+		StopAsync(preserveClipBuffer: false).GetAwaiter().GetResult();
 	}
 }

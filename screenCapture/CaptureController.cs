@@ -13,6 +13,7 @@ public sealed class CaptureController : IDisposable
 	private readonly AudioRecorder _systemRecorder = new();
 	private bool _disposed;
 	private bool _sessionStarting;
+	private ClipSession? _lastStoppedSession;
 	private Action<Bitmap>? _previewFrameUpdated;
 	private int _previewSubscriberCount;
 
@@ -48,6 +49,7 @@ public sealed class CaptureController : IDisposable
 				return Task.CompletedTask;
 			}
 
+			DisposeLastStoppedSessionLocked();
 			_sessionStarting = true;
 			var settings = CreateDefaultSettings();
 			var session = new ClipSession(settings);
@@ -108,10 +110,12 @@ public sealed class CaptureController : IDisposable
 
 		if (session != null)
 		{
-			await session.StopAsync();
-			session.StatusChanged -= OnSessionStatusChanged;
-			session.PreviewFrameReady -= OnPreviewFrameReady;
-			session.Dispose();
+			await session.StopAsync(preserveClipBuffer: true);
+			lock (_sync)
+			{
+				DisposeLastStoppedSessionLocked();
+				_lastStoppedSession = session;
+			}
 		}
 
 	}
@@ -172,7 +176,7 @@ public sealed class CaptureController : IDisposable
 		ClipSession? session;
 		lock (_sync)
 		{
-			session = _session;
+			session = _session ?? _lastStoppedSession;
 		}
 
 		if (session == null)
@@ -312,6 +316,10 @@ public sealed class CaptureController : IDisposable
 
 		_micRecorder.Dispose();
 		_systemRecorder.Dispose();
+		lock (_sync)
+		{
+			DisposeLastStoppedSessionLocked();
+		}
 		_disposed = true;
 	}
 
@@ -326,5 +334,18 @@ public sealed class CaptureController : IDisposable
 	private void UpdatePreviewStateLocked()
 	{
 		_session?.SetPreviewEnabled(_previewSubscriberCount > 0);
+	}
+
+	private void DisposeLastStoppedSessionLocked()
+	{
+		if (_lastStoppedSession == null)
+		{
+			return;
+		}
+
+		_lastStoppedSession.StatusChanged -= OnSessionStatusChanged;
+		_lastStoppedSession.PreviewFrameReady -= OnPreviewFrameReady;
+		_lastStoppedSession.Dispose();
+		_lastStoppedSession = null;
 	}
 }

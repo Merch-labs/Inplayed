@@ -171,10 +171,18 @@ public sealed class CaptureManager : IDisposable
 	public void Dispose()
 	{
 		StopAsync().GetAwaiter().GetResult();
+		DisposeResources(disposeEncoder: true);
+	}
+
+	public void DisposeResources(bool disposeEncoder)
+	{
 		_previewStaging?.Dispose();
 		_previewStaging = null;
 		_source.Dispose();
-		_encoder.Dispose();
+		if (disposeEncoder)
+		{
+			_encoder.Dispose();
+		}
 	}
 
 	private void TryEmitPreview(TextureFrameRef frame)
