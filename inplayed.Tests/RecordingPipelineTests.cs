@@ -116,6 +116,39 @@ public sealed class RecordingPipelineTests
 	}
 
 	[Fact]
+	public void ClipTimingEstimator_CountsUniqueFrameTimestamps_ForMultiSliceFrames()
+	{
+		var snapshot = new EncodedPacketSnapshot(new[]
+		{
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x65, 0x01 }, 1000, 1000, true),
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x02 }, 1000, 1000, false),
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x03 }, 2000, 2000, false),
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x04 }, 2000, 2000, false)
+		});
+
+		var fps = ClipTimingEstimator.ResolveFps(snapshot, TimeSpan.FromSeconds(1), 60);
+
+		Assert.Equal(2, ClipTimingEstimator.EstimateFrameCount(snapshot.Packets));
+		Assert.Equal(2, fps);
+	}
+
+	[Fact]
+	public void ClipTimingEstimator_UsesObservedDuration_WhenClipWindowIsShorterThanRequested()
+	{
+		var snapshot = new EncodedPacketSnapshot(new[]
+		{
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x65, 0x01 }, 1000, 1000, true),
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x02 }, 1500, 1500, false),
+			new EncodedPacket(new byte[] { 0x00, 0x00, 0x00, 0x01, 0x41, 0x03 }, 2000, 2000, false)
+		});
+
+		var fps = ClipTimingEstimator.ResolveFps(snapshot, TimeSpan.FromSeconds(20), 60);
+
+		Assert.Equal(3, ClipTimingEstimator.EstimateFrameCount(snapshot.Packets));
+		Assert.Equal(3, fps);
+	}
+
+	[Fact]
 	public void Packetizer_EmitsCompletedNals_AndKeepsTailUntilCompleted()
 	{
 		var packetizer = new H264AnnexBPacketizer();
