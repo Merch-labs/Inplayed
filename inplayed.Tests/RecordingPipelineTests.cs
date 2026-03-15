@@ -302,6 +302,14 @@ public sealed class RecordingPipelineTests
 	}
 
 	[Fact]
+	public void CaptureClock_ToMilliseconds_ConvertsStopwatchTicks()
+	{
+		var milliseconds = CaptureClock.ToMilliseconds(System.Diagnostics.Stopwatch.Frequency);
+
+		Assert.Equal(1000, milliseconds);
+	}
+
+	[Fact]
 	public void FfmpegCapabilities_ContainsEncoderListing_MatchesEncoderName()
 	{
 		const string listing = """

@@ -172,7 +172,7 @@ public sealed class CaptureController : IDisposable
 
 	public async Task SaveClip()
 	{
-		var saveTimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		var saveTimestampMs = CaptureClock.NowMilliseconds();
 		ClipSession? session;
 		lock (_sync)
 		{

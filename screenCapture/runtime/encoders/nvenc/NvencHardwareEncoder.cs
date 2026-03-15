@@ -1544,7 +1544,7 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			Marshal.Copy(locked.bitstreamBufferPtr, data, 0, size);
 
 			var isKeyFrame = IsKeyFramePacket(data);
-			var ts = frameTimestamp > 0 ? frameTimestamp : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+			var ts = frameTimestamp > 0 ? frameTimestamp : CaptureClock.NowMilliseconds();
 			_ringBuffer?.Append(new EncodedPacket(data, ts, ts, isKeyFrame));
 			_encodedPacketCount++;
 			_encodedPacketBytes += size;

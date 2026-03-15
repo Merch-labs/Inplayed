@@ -32,7 +32,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 	private Task? _stderrTask;
 	private EncodedPacketRingBuffer? _ringBuffer;
 	private bool _running;
-	private Stopwatch _clock = new();
 	private long _inputBytes;
 	private long _packetBytes;
 	private long _packetCount;
@@ -76,7 +75,6 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 				_allocatedBuffers = 0;
 			}
 			_ringBuffer = new EncodedPacketRingBuffer(TimeSpan.FromSeconds(Math.Max(1, settings.ClipSeconds) + 4));
-			_clock = Stopwatch.StartNew();
 			StartFfmpegLocked(settings, _videoCodec, _inputWidth, _inputHeight);
 			_running = true;
 		}
@@ -445,7 +443,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			var tsMs = Interlocked.Read(ref _lastSubmittedFrameTs);
 			if (tsMs <= 0)
 			{
-				tsMs = _clock.ElapsedMilliseconds;
+				tsMs = CaptureClock.NowMilliseconds();
 			}
 			var packets = _packetizer.Push(readBuffer.AsSpan(0, bytesRead), tsMs, tsMs);
 			for (var i = 0; i < packets.Count; i++)
@@ -459,7 +457,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		var endTsMs = Interlocked.Read(ref _lastSubmittedFrameTs);
 		if (endTsMs <= 0)
 		{
-			endTsMs = _clock.ElapsedMilliseconds;
+			endTsMs = CaptureClock.NowMilliseconds();
 		}
 		var tail = _packetizer.Flush(endTsMs, endTsMs);
 		for (var i = 0; i < tail.Count; i++)

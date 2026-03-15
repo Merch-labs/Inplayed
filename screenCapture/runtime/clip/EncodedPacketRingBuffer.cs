@@ -17,7 +17,7 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 	public void Append(EncodedPacket packet)
 	{
 		var data = ToOwnedArray(packet.Data);
-		var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		var nowMs = CaptureClock.NowMilliseconds();
 		var packetTimeMs = packet.PresentationTimestamp > 0 ? packet.PresentationTimestamp : nowMs;
 		var node = new BufferedPacket(
 			new EncodedPacket(data, packet.PresentationTimestamp, packet.DecodeTimestamp, packet.IsKeyFrame),

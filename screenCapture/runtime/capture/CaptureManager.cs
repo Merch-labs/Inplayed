@@ -198,7 +198,7 @@ public sealed class CaptureManager : IDisposable
 			return;
 		}
 
-		var now = Environment.TickCount64;
+		var now = CaptureClock.NowMilliseconds();
 		if (now - Interlocked.Read(ref _lastPreviewTimestampMs) < PreviewIntervalMs)
 		{
 			return;

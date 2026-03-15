@@ -119,7 +119,7 @@ public sealed class AudioRecorder : IDisposable
 	{
 		lock (_sync)
 		{
-			_ringBuffer?.Write(e.Buffer, 0, e.BytesRecorded, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+			_ringBuffer?.Write(e.Buffer, 0, e.BytesRecorded, CaptureClock.NowMilliseconds());
 		}
 	}
 
@@ -181,7 +181,7 @@ internal sealed class AudioRingBuffer
 			_length = Math.Min(_length + toCopy, _buffer.Length);
 		}
 
-		_lastTimestampMs = endTimestampMs > 0 ? endTimestampMs : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+		_lastTimestampMs = endTimestampMs > 0 ? endTimestampMs : CaptureClock.NowMilliseconds();
 		_firstTimestampMs = _lastTimestampMs - GetDurationMsForBytes(_length);
 	}
 
@@ -219,7 +219,7 @@ internal sealed class AudioRingBuffer
 	{
 		if (_lastTimestampMs <= 0)
 		{
-			return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+			return CaptureClock.NowMilliseconds();
 		}
 
 		if (!requestedEndTimestampMs.HasValue)

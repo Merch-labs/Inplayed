@@ -113,7 +113,7 @@ public sealed class WgcCaptureSource : ICaptureSource
 				Marshal.Release(accessPtr);
 			}
 
-			var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+			var ts = CaptureClock.NowMilliseconds();
 			var textureFrame = TextureFrameRef.FromNativePtr(texturePtr, size.Width, size.Height, ts);
 			handler(textureFrame);
 		}
