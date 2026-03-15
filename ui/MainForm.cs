@@ -6,6 +6,7 @@ namespace inplayed;
 public sealed class MainForm : Form
 {
 	private readonly CaptureController _captureController = new();
+	private GlobalHotkey? _saveClipHotkey;
 	private readonly Panel _topBarPanel;
 	private readonly Label _topBarTitle;
 	private readonly Panel _bodyPanel;
@@ -78,6 +79,7 @@ public sealed class MainForm : Form
 		AddSidebarButton("library", (_, _) => ShowPage("library"));
 		AddSidebarButton("settings", (_, _) => ShowPage("settings"));
 		ShowPage("recording");
+		ReloadSaveClipHotkey();
 	}
 
 	public Button AddSidebarButton(string name, EventHandler? onClick = null)
@@ -112,7 +114,7 @@ public sealed class MainForm : Form
 			{
 				"recording" => new RecordingPage(_captureController),
 				"library" => new LibraryPage(),
-				"settings" => new SettingsPage(),
+				"settings" => new SettingsPage(ReloadSaveClipHotkey),
 				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
 			};
 
@@ -144,10 +146,35 @@ public sealed class MainForm : Form
 		}
 	}
 
+	private void ReloadSaveClipHotkey()
+	{
+		_saveClipHotkey?.Dispose();
+		_saveClipHotkey = null;
+
+		var config = AppConfig.Load();
+		var (modifiers, key) = config.GetSaveClipHotkey();
+		_saveClipHotkey = new GlobalHotkey(this, modifiers, key);
+		_saveClipHotkey.Pressed += async (_, _) =>
+		{
+			try
+			{
+				await _captureController.SaveClip();
+			}
+			catch (Exception ex)
+			{
+				if (IsHandleCreated)
+				{
+					BeginInvoke(() => MessageBox.Show(this, ex.Message, "Save clip failed", MessageBoxButtons.OK, MessageBoxIcon.Error));
+				}
+			}
+		};
+	}
+
 	protected override void Dispose(bool disposing)
 	{
 		if (disposing)
 		{
+			_saveClipHotkey?.Dispose();
 			_captureController.Dispose();
 		}
 

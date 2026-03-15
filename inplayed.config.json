@@ -7,5 +7,12 @@
 			"modifiers": "Alt",
 			"key": "F"
 		}
+	},
+	"recording": {
+		"fps": 60,
+		"bitrateMbps": 12,
+		"clipSeconds": 20,
+		"includeMicAudio": true,
+		"includeSystemAudio": true
 	}
 }

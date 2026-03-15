@@ -1,8 +1,41 @@
 using System.IO;
 using System.Linq;
+using inplayed;
 
 public sealed class RecordingPipelineTests
 {
+	[Fact]
+	public void AppConfig_CreateDefault_ProvidesRecordingDefaults()
+	{
+		var config = AppConfig.CreateDefault();
+
+		Assert.True(config.NativeNvencEnabled);
+		Assert.Equal(60, config.Recording.Fps);
+		Assert.Equal(12, config.Recording.BitrateMbps);
+		Assert.Equal(20, config.Recording.ClipSeconds);
+		Assert.True(config.Recording.IncludeMicAudio);
+		Assert.True(config.Recording.IncludeSystemAudio);
+	}
+
+	[Fact]
+	public void AppConfig_GetSaveClipHotkey_ParsesCompositeModifiers()
+	{
+		var config = new AppConfig
+		{
+			SaveClipHotkey = new AppConfig.HotkeyConfig
+			{
+				Modifiers = "Control+Shift",
+				Key = "F9"
+			}
+		};
+
+		var (modifiers, key) = config.GetSaveClipHotkey();
+
+		Assert.True(modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control));
+		Assert.True(modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift));
+		Assert.Equal(System.Windows.Input.Key.F9, key);
+	}
+
 	[Fact]
 	public void MediaMuxer_BuildArguments_ReturnsNullWhenNoAudioInputsExist()
 	{

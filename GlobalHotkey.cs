@@ -1,6 +1,5 @@
-using System;
 using System.Runtime.InteropServices;
-using System.Windows;
+using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Interop;
 
@@ -9,67 +8,84 @@ namespace inplayed;
 public sealed class GlobalHotkey : IDisposable
 {
 	private static int _nextId;
-	private readonly Window _window;
+	private readonly Form _form;
 	private readonly int _id;
 	private readonly uint _modifiers;
 	private readonly uint _virtualKey;
-	private HwndSource? _source;
+	private HotkeyWindow? _window;
 	private bool _registered;
 
 	public event EventHandler? Pressed;
 
-	public GlobalHotkey(Window window, ModifierKeys modifiers, Key key)
+	public GlobalHotkey(Form form, ModifierKeys modifiers, Key key)
 	{
-		_window = window;
-		_id = System.Threading.Interlocked.Increment(ref _nextId);
+		_form = form;
+		_id = Interlocked.Increment(ref _nextId);
 		_modifiers = ToNativeModifiers(modifiers);
 		_virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
 
-		_window.SourceInitialized += OnSourceInitialized;
-		_window.Closed += OnClosed;
+		_form.HandleCreated += OnHandleCreated;
+		_form.HandleDestroyed += OnHandleDestroyed;
+		_form.FormClosed += OnFormClosed;
+
+		if (_form.IsHandleCreated)
+		{
+			RegisterHotkey();
+		}
 	}
 
-	private void OnSourceInitialized(object? sender, EventArgs e)
+	private void OnHandleCreated(object? sender, EventArgs e)
 	{
-		var handle = new WindowInteropHelper(_window).Handle;
-		_source = HwndSource.FromHwnd(handle);
-		_source?.AddHook(WndProc);
-		_registered = RegisterHotKey(handle, _id, _modifiers, _virtualKey);
+		RegisterHotkey();
 	}
 
-	private void OnClosed(object? sender, EventArgs e)
+	private void OnHandleDestroyed(object? sender, EventArgs e)
+	{
+		UnregisterHotkey();
+	}
+
+	private void OnFormClosed(object? sender, FormClosedEventArgs e)
 	{
 		Dispose();
 	}
 
-	private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+	private void RegisterHotkey()
 	{
-		if (msg == 0x0312 && wParam.ToInt32() == _id)
+		if (_registered || !_form.IsHandleCreated)
 		{
-			Pressed?.Invoke(this, EventArgs.Empty);
-			handled = true;
+			return;
 		}
 
-		return IntPtr.Zero;
+		_window = new HotkeyWindow(_form.Handle, OnPressed);
+		_registered = RegisterHotKey(_form.Handle, _id, _modifiers, _virtualKey);
+	}
+
+	private void UnregisterHotkey()
+	{
+		if (_registered && _form.IsHandleCreated)
+		{
+			UnregisterHotKey(_form.Handle, _id);
+		}
+
+		_registered = false;
+		_window?.Dispose();
+		_window = null;
+	}
+
+	private void OnPressed(int id)
+	{
+		if (id == _id)
+		{
+			Pressed?.Invoke(this, EventArgs.Empty);
+		}
 	}
 
 	public void Dispose()
 	{
-		_window.SourceInitialized -= OnSourceInitialized;
-		_window.Closed -= OnClosed;
-
-		var handle = new WindowInteropHelper(_window).Handle;
-		if (_registered)
-		{
-			UnregisterHotKey(handle, _id);
-			_registered = false;
-		}
-
-		if (_source != null)
-		{
-			_source.RemoveHook(WndProc);
-			_source = null;
-		}
+		_form.HandleCreated -= OnHandleCreated;
+		_form.HandleDestroyed -= OnHandleDestroyed;
+		_form.FormClosed -= OnFormClosed;
+		UnregisterHotkey();
 	}
 
 	private static uint ToNativeModifiers(ModifierKeys modifiers)
@@ -87,4 +103,30 @@ public sealed class GlobalHotkey : IDisposable
 
 	[DllImport("user32.dll", SetLastError = true)]
 	private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+	private sealed class HotkeyWindow : NativeWindow, IDisposable
+	{
+		private readonly Action<int> _onHotkey;
+
+		public HotkeyWindow(IntPtr handle, Action<int> onHotkey)
+		{
+			_onHotkey = onHotkey;
+			AssignHandle(handle);
+		}
+
+		protected override void WndProc(ref Message m)
+		{
+			if (m.Msg == 0x0312)
+			{
+				_onHotkey(m.WParam.ToInt32());
+			}
+
+			base.WndProc(ref m);
+		}
+
+		public void Dispose()
+		{
+			ReleaseHandle();
+		}
+	}
 }

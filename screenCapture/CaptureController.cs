@@ -28,7 +28,11 @@ public sealed class CaptureController : IDisposable
 			var session = new ClipSession(settings);
 			session.StatusChanged += OnSessionStatusChanged;
 			session.PreviewFrameReady += OnPreviewFrameReady;
-			StartAudioRecording(settings.ClipSeconds);
+			var appConfig = AppConfig.Load();
+			StartAudioRecording(
+				settings.ClipSeconds,
+				appConfig.Recording.IncludeMicAudio,
+				appConfig.Recording.IncludeSystemAudio);
 			return StartSessionAsync(session);
 		}
 	}
@@ -140,11 +144,18 @@ public sealed class CaptureController : IDisposable
 		return $"ready={readiness.IsReady};summary={readiness.Summary};maxVer=0x{readiness.MaxSupportedVersion:X8};cuda={readiness.CudaDriverVersion};fnPtrs={readiness.FunctionPointerCount}";
 	}
 
-	public Task StartAudioRecording(int clipSeconds)
+	public Task StartAudioRecording(int clipSeconds, bool includeMicAudio, bool includeSystemAudio)
 	{
 		ThrowIfDisposed();
-		_micRecorder.StartMic(clipSeconds);
-		_systemRecorder.StartSystem(clipSeconds);
+		if (includeMicAudio)
+		{
+			_micRecorder.StartMic(clipSeconds);
+		}
+
+		if (includeSystemAudio)
+		{
+			_systemRecorder.StartSystem(clipSeconds);
+		}
 
 		return Task.CompletedTask;
 	}
@@ -203,12 +214,13 @@ public sealed class CaptureController : IDisposable
 
 	private (string? MicPath, string? SystemPath) SaveAudioClip(string outputPath)
 	{
+		var appConfig = AppConfig.Load();
 		var baseFolder = GetDefaultMediaFolder();
 		var clipStem = System.IO.Path.GetFileNameWithoutExtension(outputPath);
 		var micPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.mic.wav");
 		var systemPath = System.IO.Path.Combine(baseFolder, $"{clipStem}.system.wav");
-		var savedMicPath = _micRecorder.SaveClip(micPath);
-		var savedSystemPath = _systemRecorder.SaveClip(systemPath);
+		var savedMicPath = appConfig.Recording.IncludeMicAudio ? _micRecorder.SaveClip(micPath) : null;
+		var savedSystemPath = appConfig.Recording.IncludeSystemAudio ? _systemRecorder.SaveClip(systemPath) : null;
 		return (savedMicPath, savedSystemPath);
 	}
 
@@ -224,9 +236,9 @@ public sealed class CaptureController : IDisposable
 		{
 			Width = bounds.Width,
 			Height = bounds.Height,
-			Fps = 60,
-			Bitrate = 12_000_000,
-			ClipSeconds = 20,
+			Fps = appConfig.Recording.Fps,
+			Bitrate = appConfig.Recording.BitrateMbps * 1_000_000,
+			ClipSeconds = appConfig.Recording.ClipSeconds,
 			UseNativeNvenc = appConfig.NativeNvencEnabled,
 			Target = new MonitorTarget { MonitorIndex = monitorIndex }
 		};
