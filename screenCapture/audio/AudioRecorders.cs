@@ -202,7 +202,7 @@ internal sealed class AudioRingBuffer
 			return Array.Empty<byte>();
 		}
 
-		var result = new byte[copyLength];
+		var result = GC.AllocateUninitializedArray<byte>(copyLength);
 		var start = (_writePos - _length + _buffer.Length) % _buffer.Length;
 		var absoluteStart = (start + startTrimBytes) % _buffer.Length;
 		var first = Math.Min(_buffer.Length - absoluteStart, copyLength);

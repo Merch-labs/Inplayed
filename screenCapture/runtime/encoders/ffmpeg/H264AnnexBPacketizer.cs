@@ -34,7 +34,7 @@ public sealed class H264AnnexBPacketizer
 				continue;
 			}
 
-			var chunk = new byte[size];
+			var chunk = GC.AllocateUninitializedArray<byte>(size);
 			_buffer.CopyTo(start, chunk, 0, size);
 			var keyframe = IsKeyframeNal(chunk);
 			_packets.Add(new EncodedPacket(chunk, pts, dts, keyframe));
@@ -61,7 +61,8 @@ public sealed class H264AnnexBPacketizer
 			return Array.Empty<EncodedPacket>();
 		}
 
-		var all = _buffer.ToArray();
+		var all = GC.AllocateUninitializedArray<byte>(_buffer.Count);
+		_buffer.CopyTo(all, 0);
 		_buffer.Clear();
 		return new[]
 		{

@@ -546,7 +546,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 			_allocatedBuffers++;
 		}
 
-		return new byte[size];
+		return GC.AllocateUninitializedArray<byte>(size);
 	}
 
 	private void ReturnFrameBuffer(byte[] buffer)

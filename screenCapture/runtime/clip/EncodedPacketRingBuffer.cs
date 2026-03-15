@@ -172,7 +172,7 @@ public sealed class EncodedPacketRingBuffer : IEncodedPacketBuffer
 					return segment.Array;
 				}
 
-				var copy = new byte[segment.Count];
+				var copy = GC.AllocateUninitializedArray<byte>(segment.Count);
 				Buffer.BlockCopy(segment.Array, segment.Offset, copy, 0, segment.Count);
 				return copy;
 			}

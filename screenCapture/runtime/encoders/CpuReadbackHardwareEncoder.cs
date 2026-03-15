@@ -56,7 +56,7 @@ public sealed class CpuReadbackHardwareEncoder : IHardwareEncoder
 				var width = frame.Width;
 				var height = frame.Height;
 				var rowBytes = width * 4;
-				var buffer = new byte[rowBytes * height];
+				var buffer = GC.AllocateUninitializedArray<byte>(rowBytes * height);
 				for (var y = 0; y < height; y++)
 				{
 					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
