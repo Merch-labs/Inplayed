@@ -16,6 +16,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="inplayed.Tests\**\*.cs" />
+    <EmbeddedResource Remove="inplayed.Tests\**\*" />
+    <None Remove="inplayed.Tests\**\*" />
+    <Page Remove="inplayed.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
   <Content Include="ui\**\*">
     <CopyToOutputDirectory>Always</CopyToOutputDirectory>
   </Content>
