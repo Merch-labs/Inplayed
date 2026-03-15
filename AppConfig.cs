@@ -23,7 +23,13 @@ internal sealed class AppConfig
 			BitrateMbps = 12,
 			ClipSeconds = 20,
 			IncludeMicAudio = true,
-			IncludeSystemAudio = true
+			IncludeSystemAudio = true,
+			CaptureTarget = new CaptureTargetConfig
+			{
+				Mode = CaptureTargetModes.PrimaryMonitor,
+				MonitorIndex = 0,
+				ExecutablePath = string.Empty
+			}
 		}
 	};
 
@@ -40,6 +46,14 @@ internal sealed class AppConfig
 		public int ClipSeconds { get; init; } = 20;
 		public bool IncludeMicAudio { get; init; } = true;
 		public bool IncludeSystemAudio { get; init; } = true;
+		public CaptureTargetConfig CaptureTarget { get; init; } = new();
+	}
+
+	internal sealed class CaptureTargetConfig
+	{
+		public string Mode { get; init; } = CaptureTargetModes.PrimaryMonitor;
+		public int MonitorIndex { get; init; }
+		public string ExecutablePath { get; init; } = string.Empty;
 	}
 
 	public static AppConfig Load()
@@ -76,7 +90,13 @@ internal sealed class AppConfig
 				BitrateMbps = Default.Recording.BitrateMbps,
 				ClipSeconds = Default.Recording.ClipSeconds,
 				IncludeMicAudio = Default.Recording.IncludeMicAudio,
-				IncludeSystemAudio = Default.Recording.IncludeSystemAudio
+				IncludeSystemAudio = Default.Recording.IncludeSystemAudio,
+				CaptureTarget = new CaptureTargetConfig
+				{
+					Mode = Default.Recording.CaptureTarget.Mode,
+					MonitorIndex = Default.Recording.CaptureTarget.MonitorIndex,
+					ExecutablePath = Default.Recording.CaptureTarget.ExecutablePath
+				}
 			}
 		};
 	}
@@ -206,6 +226,11 @@ internal sealed class AppConfig
 				return false;
 			}
 
+			if (!TryReadCaptureTarget(recording, out var captureTarget))
+			{
+				return false;
+			}
+
 			config = new AppConfig
 			{
 				NativeNvencEnabled = nativeNvencElement.GetBoolean(),
@@ -220,7 +245,8 @@ internal sealed class AppConfig
 					BitrateMbps = bitrateMbps,
 					ClipSeconds = clipSeconds,
 					IncludeMicAudio = includeMicAudio,
-					IncludeSystemAudio = includeSystemAudio
+					IncludeSystemAudio = includeSystemAudio,
+					CaptureTarget = captureTarget
 				}
 			};
 			return true;
@@ -261,6 +287,11 @@ internal sealed class AppConfig
 			writer.WriteNumber("clipSeconds", config.Recording.ClipSeconds);
 			writer.WriteBoolean("includeMicAudio", config.Recording.IncludeMicAudio);
 			writer.WriteBoolean("includeSystemAudio", config.Recording.IncludeSystemAudio);
+			writer.WriteStartObject("captureTarget");
+			writer.WriteString("mode", config.Recording.CaptureTarget.Mode);
+			writer.WriteNumber("monitorIndex", config.Recording.CaptureTarget.MonitorIndex);
+			writer.WriteString("executablePath", config.Recording.CaptureTarget.ExecutablePath);
+			writer.WriteEndObject();
 			writer.WriteEndObject();
 			writer.WriteEndObject();
 			writer.Flush();
@@ -288,6 +319,38 @@ internal sealed class AppConfig
 		return true;
 	}
 
+	private static bool TryReadCaptureTarget(JsonElement recording, out CaptureTargetConfig captureTarget)
+	{
+		captureTarget = new CaptureTargetConfig();
+		if (!recording.TryGetProperty("captureTarget", out var targetElement) || targetElement.ValueKind != JsonValueKind.Object)
+		{
+			return false;
+		}
+
+		if (!TryReadString(targetElement, "mode", out var mode) || !CaptureTargetModes.IsValid(mode))
+		{
+			return false;
+		}
+
+		if (!TryReadInt(targetElement, "monitorIndex", 0, 32, out var monitorIndex))
+		{
+			return false;
+		}
+
+		if (!TryReadString(targetElement, "executablePath", out var executablePath))
+		{
+			return false;
+		}
+
+		captureTarget = new CaptureTargetConfig
+		{
+			Mode = mode,
+			MonitorIndex = monitorIndex,
+			ExecutablePath = executablePath
+		};
+		return true;
+	}
+
 	private static bool TryReadInt(JsonElement parent, string propertyName, int min, int max, out int value)
 	{
 		value = 0;
@@ -307,6 +370,18 @@ internal sealed class AppConfig
 		}
 
 		value = parsed;
+		return true;
+	}
+
+	private static bool TryReadString(JsonElement parent, string propertyName, out string value)
+	{
+		value = string.Empty;
+		if (!parent.TryGetProperty(propertyName, out var element) || element.ValueKind != JsonValueKind.String)
+		{
+			return false;
+		}
+
+		value = element.GetString() ?? string.Empty;
 		return true;
 	}
 

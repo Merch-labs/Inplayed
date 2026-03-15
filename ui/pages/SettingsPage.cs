@@ -11,6 +11,9 @@ public sealed class SettingsPage : UserControl
 	private readonly NumericUpDown _clipSecondsInput;
 	private readonly CheckBox _includeMicAudioCheckBox;
 	private readonly CheckBox _includeSystemAudioCheckBox;
+	private readonly ComboBox _captureTargetModeComboBox;
+	private readonly NumericUpDown _monitorIndexInput;
+	private readonly TextBox _executablePathTextBox;
 	private readonly CheckBox _ctrlModifierCheckBox;
 	private readonly CheckBox _altModifierCheckBox;
 	private readonly CheckBox _shiftModifierCheckBox;
@@ -27,10 +30,11 @@ public sealed class SettingsPage : UserControl
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 6,
+			RowCount = 7,
 			ColumnCount = 1,
 			Padding = new Padding(12)
 		};
+		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -109,6 +113,63 @@ public sealed class SettingsPage : UserControl
 		recordingLayout.Controls.Add(_includeSystemAudioCheckBox, 0, 4);
 		recordingLayout.SetColumnSpan(_includeSystemAudioCheckBox, 2);
 		recordingGroup.Controls.Add(recordingLayout);
+
+		var captureTargetGroup = new GroupBox
+		{
+			AutoSize = true,
+			Dock = DockStyle.Top,
+			Text = "Capture Target",
+			Padding = new Padding(10)
+		};
+
+		var captureTargetLayout = new TableLayoutPanel
+		{
+			AutoSize = true,
+			ColumnCount = 3,
+			RowCount = 3,
+			Dock = DockStyle.Fill
+		};
+		captureTargetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		captureTargetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		captureTargetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+		_captureTargetModeComboBox = new ComboBox
+		{
+			DropDownStyle = ComboBoxStyle.DropDownList,
+			Width = 220
+		};
+		_captureTargetModeComboBox.Items.AddRange(GetCaptureTargetOptions());
+		_captureTargetModeComboBox.SelectedIndexChanged += (_, _) => UpdateCaptureTargetInputs();
+
+		_monitorIndexInput = new NumericUpDown
+		{
+			Minimum = 0,
+			Maximum = Math.Max(0, Screen.AllScreens.Length - 1),
+			Value = 0,
+			Width = 90
+		};
+
+		_executablePathTextBox = new TextBox
+		{
+			Width = 340
+		};
+
+		var browseExecutableButton = new Button
+		{
+			AutoSize = true,
+			Text = "Browse..."
+		};
+		browseExecutableButton.Click += (_, _) => BrowseExecutablePath();
+
+		captureTargetLayout.Controls.Add(new Label { AutoSize = true, Text = "Mode", Margin = new Padding(0, 7, 8, 0) }, 0, 0);
+		captureTargetLayout.Controls.Add(_captureTargetModeComboBox, 1, 0);
+		captureTargetLayout.SetColumnSpan(_captureTargetModeComboBox, 2);
+		captureTargetLayout.Controls.Add(new Label { AutoSize = true, Text = "Monitor Index", Margin = new Padding(0, 7, 8, 0) }, 0, 1);
+		captureTargetLayout.Controls.Add(_monitorIndexInput, 1, 1);
+		captureTargetLayout.Controls.Add(new Label { AutoSize = true, Text = "Executable Path", Margin = new Padding(0, 7, 8, 0) }, 0, 2);
+		captureTargetLayout.Controls.Add(_executablePathTextBox, 1, 2);
+		captureTargetLayout.Controls.Add(browseExecutableButton, 2, 2);
+		captureTargetGroup.Controls.Add(captureTargetLayout);
 
 		var hotkeyGroup = new GroupBox
 		{
@@ -189,10 +250,11 @@ public sealed class SettingsPage : UserControl
 
 		root.Controls.Add(_nativeNvencCheckBox, 0, 0);
 		root.Controls.Add(recordingGroup, 0, 1);
-		root.Controls.Add(hotkeyGroup, 0, 2);
-		root.Controls.Add(_configPathLabel, 0, 3);
-		root.Controls.Add(actions, 0, 4);
-		root.Controls.Add(_statusLabel, 0, 5);
+		root.Controls.Add(captureTargetGroup, 0, 2);
+		root.Controls.Add(hotkeyGroup, 0, 3);
+		root.Controls.Add(_configPathLabel, 0, 4);
+		root.Controls.Add(actions, 0, 5);
+		root.Controls.Add(_statusLabel, 0, 6);
 
 		Controls.Add(root);
 		LoadSettings();
@@ -220,6 +282,10 @@ public sealed class SettingsPage : UserControl
 		_clipSecondsInput.Value = config.Recording.ClipSeconds;
 		_includeMicAudioCheckBox.Checked = config.Recording.IncludeMicAudio;
 		_includeSystemAudioCheckBox.Checked = config.Recording.IncludeSystemAudio;
+		SelectCaptureTargetMode(config.Recording.CaptureTarget.Mode);
+		_monitorIndexInput.Value = Math.Max(_monitorIndexInput.Minimum, Math.Min(_monitorIndexInput.Maximum, config.Recording.CaptureTarget.MonitorIndex));
+		_executablePathTextBox.Text = config.Recording.CaptureTarget.ExecutablePath;
+		UpdateCaptureTargetInputs();
 		ApplyModifiers(config.SaveClipHotkey.Modifiers);
 		SelectHotkeyKey(config.SaveClipHotkey.Key);
 	}
@@ -246,7 +312,13 @@ public sealed class SettingsPage : UserControl
 				BitrateMbps = (int)_bitrateInput.Value,
 				ClipSeconds = (int)_clipSecondsInput.Value,
 				IncludeMicAudio = _includeMicAudioCheckBox.Checked,
-				IncludeSystemAudio = _includeSystemAudioCheckBox.Checked
+				IncludeSystemAudio = _includeSystemAudioCheckBox.Checked,
+				CaptureTarget = new AppConfig.CaptureTargetConfig
+				{
+					Mode = GetSelectedCaptureTargetMode(),
+					MonitorIndex = (int)_monitorIndexInput.Value,
+					ExecutablePath = _executablePathTextBox.Text.Trim()
+				}
 			}
 		};
 
@@ -267,6 +339,20 @@ public sealed class SettingsPage : UserControl
 		System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
 	}
 
+	private void BrowseExecutablePath()
+	{
+		using var dialog = new OpenFileDialog
+		{
+			Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+			Title = "Select executable to capture"
+		};
+
+		if (dialog.ShowDialog(this) == DialogResult.OK)
+		{
+			_executablePathTextBox.Text = dialog.FileName;
+		}
+	}
+
 	private void ApplyModifiers(string modifiers)
 	{
 		var values = modifiers
@@ -284,6 +370,38 @@ public sealed class SettingsPage : UserControl
 	{
 		var idx = _hotkeyComboBox.Items.IndexOf(key.ToUpperInvariant());
 		_hotkeyComboBox.SelectedIndex = idx >= 0 ? idx : 0;
+	}
+
+	private void SelectCaptureTargetMode(string mode)
+	{
+		for (var i = 0; i < _captureTargetModeComboBox.Items.Count; i++)
+		{
+			if (_captureTargetModeComboBox.Items[i] is CaptureTargetOption option &&
+				string.Equals(option.Mode, mode, StringComparison.OrdinalIgnoreCase))
+			{
+				_captureTargetModeComboBox.SelectedIndex = i;
+				return;
+			}
+		}
+
+		_captureTargetModeComboBox.SelectedIndex = 0;
+	}
+
+	private string GetSelectedCaptureTargetMode()
+	{
+		return _captureTargetModeComboBox.SelectedItem is CaptureTargetOption option
+			? option.Mode
+			: CaptureTargetModes.PrimaryMonitor;
+	}
+
+	private void UpdateCaptureTargetInputs()
+	{
+		var mode = GetSelectedCaptureTargetMode();
+		var usesMonitorIndex = string.Equals(mode, CaptureTargetModes.SpecificMonitor, StringComparison.OrdinalIgnoreCase);
+		var usesExecutablePath = string.Equals(mode, CaptureTargetModes.ExecutablePath, StringComparison.OrdinalIgnoreCase);
+
+		_monitorIndexInput.Enabled = usesMonitorIndex;
+		_executablePathTextBox.Enabled = usesExecutablePath;
 	}
 
 	private string BuildModifiers()
@@ -316,5 +434,33 @@ public sealed class SettingsPage : UserControl
 		}
 
 		return keys.ToArray();
+	}
+
+	private static object[] GetCaptureTargetOptions()
+	{
+		return new object[]
+		{
+			new CaptureTargetOption("Primary Monitor", CaptureTargetModes.PrimaryMonitor),
+			new CaptureTargetOption("Specific Monitor Index", CaptureTargetModes.SpecificMonitor),
+			new CaptureTargetOption("Active Window At Start", CaptureTargetModes.ActiveWindow),
+			new CaptureTargetOption("Executable Path", CaptureTargetModes.ExecutablePath)
+		};
+	}
+
+	private sealed class CaptureTargetOption
+	{
+		public CaptureTargetOption(string label, string mode)
+		{
+			Label = label;
+			Mode = mode;
+		}
+
+		public string Label { get; }
+		public string Mode { get; }
+
+		public override string ToString()
+		{
+			return Label;
+		}
 	}
 }

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Drawing;
 using inplayed;
 
 public sealed class RecordingPipelineTests
@@ -15,6 +16,9 @@ public sealed class RecordingPipelineTests
 		Assert.Equal(20, config.Recording.ClipSeconds);
 		Assert.True(config.Recording.IncludeMicAudio);
 		Assert.True(config.Recording.IncludeSystemAudio);
+		Assert.Equal(CaptureTargetModes.PrimaryMonitor, config.Recording.CaptureTarget.Mode);
+		Assert.Equal(0, config.Recording.CaptureTarget.MonitorIndex);
+		Assert.Equal(string.Empty, config.Recording.CaptureTarget.ExecutablePath);
 	}
 
 	[Fact]
@@ -146,6 +150,111 @@ public sealed class RecordingPipelineTests
 
 		Assert.Equal(3, ClipTimingEstimator.EstimateFrameCount(snapshot.Packets));
 		Assert.Equal(3, fps);
+	}
+
+	[Fact]
+	public void RecordingSettingsFactory_UsesSpecificMonitorBounds_WhenConfigured()
+	{
+		var config = new AppConfig
+		{
+			NativeNvencEnabled = true,
+			Recording = new AppConfig.RecordingConfig
+			{
+				Fps = 120,
+				BitrateMbps = 24,
+				ClipSeconds = 30,
+				IncludeMicAudio = true,
+				IncludeSystemAudio = false,
+				CaptureTarget = new AppConfig.CaptureTargetConfig
+				{
+					Mode = CaptureTargetModes.SpecificMonitor,
+					MonitorIndex = 1,
+					ExecutablePath = string.Empty
+				}
+			}
+		};
+
+		var settings = RecordingSettingsFactory.Create(
+			config,
+			new[]
+			{
+				new Rectangle(0, 0, 1920, 1080),
+				new Rectangle(1920, 0, 2560, 1440)
+			},
+			primaryMonitorIndex: 0,
+			getActiveMonitorIndex: static () => 0,
+			getActiveWindowHandle: static () => IntPtr.Zero,
+			getWindowHandleByExecutablePath: static _ => IntPtr.Zero,
+			getWindowBounds: static _ => Rectangle.Empty);
+
+		var target = Assert.IsType<MonitorTarget>(settings.Target);
+		Assert.Equal(1, target.MonitorIndex);
+		Assert.Equal(2560, settings.Width);
+		Assert.Equal(1440, settings.Height);
+		Assert.Equal(120, settings.Fps);
+		Assert.Equal(24_000_000, settings.Bitrate);
+		Assert.Equal(30, settings.ClipSeconds);
+		Assert.True(settings.UseNativeNvenc);
+	}
+
+	[Fact]
+	public void RecordingSettingsFactory_UsesActiveWindowBounds_WhenConfigured()
+	{
+		var config = new AppConfig
+		{
+			Recording = new AppConfig.RecordingConfig
+			{
+				CaptureTarget = new AppConfig.CaptureTargetConfig
+				{
+					Mode = CaptureTargetModes.ActiveWindow,
+					MonitorIndex = 0,
+					ExecutablePath = string.Empty
+				}
+			}
+		};
+
+		var hwnd = new IntPtr(42);
+		var settings = RecordingSettingsFactory.Create(
+			config,
+			new[] { new Rectangle(0, 0, 1920, 1080) },
+			primaryMonitorIndex: 0,
+			getActiveMonitorIndex: static () => 0,
+			getActiveWindowHandle: () => hwnd,
+			getWindowHandleByExecutablePath: static _ => IntPtr.Zero,
+			getWindowBounds: handle => handle == hwnd ? new Rectangle(50, 60, 1600, 900) : Rectangle.Empty);
+
+		var target = Assert.IsType<WindowTarget>(settings.Target);
+		Assert.Equal(hwnd, target.Hwnd);
+		Assert.Equal(1600, settings.Width);
+		Assert.Equal(900, settings.Height);
+	}
+
+	[Fact]
+	public void RecordingSettingsFactory_Throws_WhenExecutableTargetHasNoRunningWindow()
+	{
+		var config = new AppConfig
+		{
+			Recording = new AppConfig.RecordingConfig
+			{
+				CaptureTarget = new AppConfig.CaptureTargetConfig
+				{
+					Mode = CaptureTargetModes.ExecutablePath,
+					MonitorIndex = 0,
+					ExecutablePath = @"C:\Games\Example\game.exe"
+				}
+			}
+		};
+
+		var exception = Assert.Throws<InvalidOperationException>(() => RecordingSettingsFactory.Create(
+			config,
+			new[] { new Rectangle(0, 0, 1920, 1080) },
+			primaryMonitorIndex: 0,
+			getActiveMonitorIndex: static () => 0,
+			getActiveWindowHandle: static () => IntPtr.Zero,
+			getWindowHandleByExecutablePath: static _ => IntPtr.Zero,
+			getWindowBounds: static _ => Rectangle.Empty));
+
+		Assert.Contains("No running window matched", exception.Message);
 	}
 
 	[Fact]

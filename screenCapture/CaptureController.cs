@@ -203,21 +203,7 @@ public sealed class CaptureController : IDisposable
 	private static RecordingSettings CreateDefaultSettings()
 	{
 		var appConfig = AppConfig.Load();
-		var monitorIndex = ActiveTargetResolver.GetActiveMonitorIndex();
-		var screens = Screen.AllScreens;
-		var screen = (monitorIndex >= 0 && monitorIndex < screens.Length) ? screens[monitorIndex] : Screen.PrimaryScreen;
-		var bounds = screen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
-
-		return new RecordingSettings
-		{
-			Width = bounds.Width,
-			Height = bounds.Height,
-			Fps = appConfig.Recording.Fps,
-			Bitrate = appConfig.Recording.BitrateMbps * 1_000_000,
-			ClipSeconds = appConfig.Recording.ClipSeconds,
-			UseNativeNvenc = appConfig.NativeNvencEnabled,
-			Target = new MonitorTarget { MonitorIndex = monitorIndex }
-		};
+		return RecordingSettingsFactory.Create(appConfig);
 	}
 
 	private static string GetDefaultClipPath()

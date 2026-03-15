@@ -13,6 +13,11 @@
 		"bitrateMbps": 12,
 		"clipSeconds": 20,
 		"includeMicAudio": true,
-		"includeSystemAudio": true
+		"includeSystemAudio": true,
+		"captureTarget": {
+			"mode": "PrimaryMonitor",
+			"monitorIndex": 0,
+			"executablePath": ""
+		}
 	}
 }
