@@ -3,11 +3,43 @@ using System.IO;
 
 public static class FfmpegCapabilities
 {
+	private static readonly object _encodersGate = new();
+	private static string? _cachedEncoderListing;
+
 	public static bool SupportsEncoder(string encoderName)
 	{
 		if (string.IsNullOrWhiteSpace(encoderName))
 		{
 			return false;
+		}
+
+		var listing = GetEncoderListing();
+		if (string.IsNullOrWhiteSpace(listing))
+		{
+			return false;
+		}
+
+		return ContainsEncoderListing(listing, encoderName);
+	}
+
+	internal static bool ContainsEncoderListing(string listing, string encoderName)
+	{
+		if (string.IsNullOrWhiteSpace(listing) || string.IsNullOrWhiteSpace(encoderName))
+		{
+			return false;
+		}
+
+		return listing.Contains(encoderName, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static string? GetEncoderListing()
+	{
+		lock (_encodersGate)
+		{
+			if (!string.IsNullOrWhiteSpace(_cachedEncoderListing))
+			{
+				return _cachedEncoderListing;
+			}
 		}
 
 		try
@@ -26,7 +58,7 @@ public static class FfmpegCapabilities
 			using var process = Process.Start(psi);
 			if (process == null)
 			{
-				return false;
+				return null;
 			}
 
 			var text = process.StandardOutput.ReadToEnd();
@@ -34,15 +66,23 @@ public static class FfmpegCapabilities
 			process.WaitForExit();
 			if (process.ExitCode != 0)
 			{
-				return false;
+				return null;
 			}
 
-			return text.Contains(encoderName, StringComparison.OrdinalIgnoreCase) ||
-				err.Contains(encoderName, StringComparison.OrdinalIgnoreCase);
+			var listing = $"{text}{Environment.NewLine}{err}";
+			lock (_encodersGate)
+			{
+				if (string.IsNullOrWhiteSpace(_cachedEncoderListing))
+				{
+					_cachedEncoderListing = listing;
+				}
+
+				return _cachedEncoderListing;
+			}
 		}
 		catch
 		{
-			return false;
+			return null;
 		}
 	}
 

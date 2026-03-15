@@ -3,12 +3,25 @@ using Vortice.DXGI;
 internal static class GpuCapabilityProbe
 {
 	private const int NvidiaVendorId = 0x10DE;
+	private static readonly object _cacheGate = new();
+	private static bool? _hasNvidiaAdapter;
 
 	public static bool IsNvidiaAdapterPresent()
 	{
+		var cached = _hasNvidiaAdapter;
+		if (cached.HasValue)
+		{
+			return cached.Value;
+		}
+
 		try
 		{
-			return ContainsVendorId(EnumerateAdapterVendorIds(), NvidiaVendorId);
+			var hasNvidiaAdapter = ContainsVendorId(EnumerateAdapterVendorIds(), NvidiaVendorId);
+			lock (_cacheGate)
+			{
+				_hasNvidiaAdapter ??= hasNvidiaAdapter;
+				return _hasNvidiaAdapter.Value;
+			}
 		}
 		catch
 		{

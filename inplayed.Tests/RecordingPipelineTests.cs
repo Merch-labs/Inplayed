@@ -302,6 +302,31 @@ public sealed class RecordingPipelineTests
 	}
 
 	[Fact]
+	public void FfmpegCapabilities_ContainsEncoderListing_MatchesEncoderName()
+	{
+		const string listing = """
+ V....D h264_nvenc           NVIDIA NVENC H.264 encoder
+ V....D hevc_nvenc           NVIDIA NVENC hevc encoder
+""";
+
+		var supportsEncoder = FfmpegCapabilities.ContainsEncoderListing(listing, "h264_nvenc");
+
+		Assert.True(supportsEncoder);
+	}
+
+	[Fact]
+	public void FfmpegCapabilities_ContainsEncoderListing_ReturnsFalseForMissingEncoder()
+	{
+		const string listing = """
+ V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+""";
+
+		var supportsEncoder = FfmpegCapabilities.ContainsEncoderListing(listing, "h264_nvenc");
+
+		Assert.False(supportsEncoder);
+	}
+
+	[Fact]
 	public void Packetizer_EmitsCompletedNals_AndKeepsTailUntilCompleted()
 	{
 		var packetizer = new H264AnnexBPacketizer();
