@@ -11,11 +11,11 @@ public sealed class RecordingPage : UserControl
 	private readonly Button _startButton;
 	private readonly Button _stopButton;
 	private readonly Button _saveButton;
+	private bool _previewSubscribed;
 
 	public RecordingPage(CaptureController controller)
 	{
 		_controller = controller;
-		_controller.PreviewFrameUpdated += OnPreviewFrameUpdated;
 
 		var root = new TableLayoutPanel
 		{
@@ -69,6 +69,20 @@ public sealed class RecordingPage : UserControl
 		Controls.Add(root);
 
 		UpdateStatus();
+	}
+
+	protected override void OnVisibleChanged(EventArgs e)
+	{
+		base.OnVisibleChanged(e);
+
+		if (Visible)
+		{
+			SubscribePreview();
+		}
+		else
+		{
+			UnsubscribePreview(clearPreview: true);
+		}
 	}
 
 	private async Task StartCaptureAsync()
@@ -146,12 +160,38 @@ public sealed class RecordingPage : UserControl
 		_statusLabel.Text = $"Status: {_controller.GetSessionStatus()}";
 	}
 
+	private void SubscribePreview()
+	{
+		if (_previewSubscribed)
+		{
+			return;
+		}
+
+		_controller.PreviewFrameUpdated += OnPreviewFrameUpdated;
+		_previewSubscribed = true;
+	}
+
+	private void UnsubscribePreview(bool clearPreview)
+	{
+		if (_previewSubscribed)
+		{
+			_controller.PreviewFrameUpdated -= OnPreviewFrameUpdated;
+			_previewSubscribed = false;
+		}
+
+		if (clearPreview)
+		{
+			var previous = _previewBox.Image;
+			_previewBox.Image = null;
+			previous?.Dispose();
+		}
+	}
+
 	protected override void Dispose(bool disposing)
 	{
 		if (disposing)
 		{
-			_controller.PreviewFrameUpdated -= OnPreviewFrameUpdated;
-			_previewBox.Image?.Dispose();
+			UnsubscribePreview(clearPreview: true);
 		}
 
 		base.Dispose(disposing);
