@@ -1,3 +1,5 @@
+using System.Drawing;
+
 public sealed class ClipSession : IDisposable
 {
 	public RecordingSettings Settings { get; private set; }
@@ -8,6 +10,7 @@ public sealed class ClipSession : IDisposable
 	private CaptureManager? _captureManager;
 
 	public event Action<string>? StatusChanged;
+	public event Action<Bitmap>? PreviewFrameReady;
 
 	public ClipSession(RecordingSettings settings)
 	{
@@ -26,6 +29,7 @@ public sealed class ClipSession : IDisposable
 		StatusChanged?.Invoke($"encoderPolicy:{HardwareEncoderFactory.GetSelectionDebug(Settings)}");
 		_encoder = HardwareEncoderFactory.Create(Settings);
 		_captureManager = new CaptureManager(_captureSource, _encoder);
+		_captureManager.PreviewFrameReady += OnPreviewFrameReady;
 
 		try
 		{
@@ -54,6 +58,7 @@ public sealed class ClipSession : IDisposable
 
 		if (_captureManager != null)
 		{
+			_captureManager.PreviewFrameReady -= OnPreviewFrameReady;
 			await _captureManager.StopAsync();
 			_captureManager.Dispose();
 			_captureManager = null;
@@ -70,6 +75,11 @@ public sealed class ClipSession : IDisposable
 		_cts = null;
 
 		StatusChanged?.Invoke("stopped");
+	}
+
+	private void OnPreviewFrameReady(Bitmap frame)
+	{
+		PreviewFrameReady?.Invoke(frame);
 	}
 
 	public Task SaveClipAsync(string path)
