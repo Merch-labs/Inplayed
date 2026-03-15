@@ -12,18 +12,21 @@ public sealed class CaptureController : IDisposable
 	private readonly AudioRecorder _micRecorder = new();
 	private readonly AudioRecorder _systemRecorder = new();
 	private bool _disposed;
-	private Bitmap? _latestPreviewFrame;
+	private bool _sessionStarting;
+
+	public event Action<Bitmap>? PreviewFrameUpdated;
 
 	public Task StartCapture()
 	{
 		ThrowIfDisposed();
 		lock (_sync)
 		{
-			if (_session != null)
+			if (_session != null || _sessionStarting)
 			{
 				return Task.CompletedTask;
 			}
 
+			_sessionStarting = true;
 			var settings = CreateDefaultSettings();
 			var session = new ClipSession(settings);
 			session.StatusChanged += OnSessionStatusChanged;
@@ -34,35 +37,6 @@ public sealed class CaptureController : IDisposable
 				appConfig.Recording.IncludeMicAudio,
 				appConfig.Recording.IncludeSystemAudio);
 			return StartSessionAsync(session);
-		}
-	}
-
-	public Bitmap? GetPreviewFrame(int maxWidth, int maxHeight)
-	{
-		if (_disposed)
-		{
-			return null;
-		}
-
-		lock (_sync)
-		{
-			if (_latestPreviewFrame == null)
-			{
-				return null;
-			}
-
-			var widthLimit = Math.Max(1, maxWidth);
-			var heightLimit = Math.Max(1, maxHeight);
-			var scale = Math.Min((double)widthLimit / _latestPreviewFrame.Width, (double)heightLimit / _latestPreviewFrame.Height);
-			scale = Math.Min(1.0, scale);
-
-			var outWidth = Math.Max(1, (int)Math.Round(_latestPreviewFrame.Width * scale));
-			var outHeight = Math.Max(1, (int)Math.Round(_latestPreviewFrame.Height * scale));
-
-			var preview = new Bitmap(outWidth, outHeight);
-			using var scaled = Graphics.FromImage(preview);
-			scaled.DrawImage(_latestPreviewFrame, 0, 0, outWidth, outHeight);
-			return preview;
 		}
 	}
 
@@ -83,6 +57,13 @@ public sealed class CaptureController : IDisposable
 			session.Dispose();
 			await StopAudioRecording();
 			throw;
+		}
+		finally
+		{
+			lock (_sync)
+			{
+				_sessionStarting = false;
+			}
 		}
 	}
 
@@ -110,11 +91,6 @@ public sealed class CaptureController : IDisposable
 			session.Dispose();
 		}
 
-		lock (_sync)
-		{
-			_latestPreviewFrame?.Dispose();
-			_latestPreviewFrame = null;
-		}
 	}
 
 	public string GetSessionStatus()
@@ -299,11 +275,14 @@ public sealed class CaptureController : IDisposable
 
 	private void OnPreviewFrameReady(Bitmap frame)
 	{
-		lock (_sync)
+		var handler = PreviewFrameUpdated;
+		if (handler != null)
 		{
-			_latestPreviewFrame?.Dispose();
-			_latestPreviewFrame = frame;
+			handler(frame);
+			return;
 		}
+
+		frame.Dispose();
 	}
 
 	public void Dispose()
@@ -323,11 +302,6 @@ public sealed class CaptureController : IDisposable
 
 		_micRecorder.Dispose();
 		_systemRecorder.Dispose();
-		lock (_sync)
-		{
-			_latestPreviewFrame?.Dispose();
-			_latestPreviewFrame = null;
-		}
 		_disposed = true;
 	}
 

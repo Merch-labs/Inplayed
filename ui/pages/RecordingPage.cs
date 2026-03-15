@@ -11,11 +11,11 @@ public sealed class RecordingPage : UserControl
 	private readonly Button _startButton;
 	private readonly Button _stopButton;
 	private readonly Button _saveButton;
-	private readonly System.Windows.Forms.Timer _previewTimer;
 
 	public RecordingPage(CaptureController controller)
 	{
 		_controller = controller;
+		_controller.PreviewFrameUpdated += OnPreviewFrameUpdated;
 
 		var root = new TableLayoutPanel
 		{
@@ -68,10 +68,6 @@ public sealed class RecordingPage : UserControl
 		root.Controls.Add(actions, 0, 2);
 		Controls.Add(root);
 
-		_previewTimer = new System.Windows.Forms.Timer { Interval = 33 };
-		_previewTimer.Tick += (_, _) => RefreshPreview();
-		_previewTimer.Start();
-
 		UpdateStatus();
 	}
 
@@ -117,16 +113,30 @@ public sealed class RecordingPage : UserControl
 		UpdateStatus();
 	}
 
-	private void RefreshPreview()
+	private void OnPreviewFrameUpdated(Bitmap frame)
 	{
-		var preview = _controller.GetPreviewFrame(960, 540);
-		if (preview == null)
+		if (IsDisposed)
 		{
+			frame.Dispose();
+			return;
+		}
+
+		if (InvokeRequired)
+		{
+			try
+			{
+				BeginInvoke(new Action<Bitmap>(OnPreviewFrameUpdated), frame);
+			}
+			catch (ObjectDisposedException)
+			{
+				frame.Dispose();
+			}
+
 			return;
 		}
 
 		var previous = _previewBox.Image;
-		_previewBox.Image = preview;
+		_previewBox.Image = frame;
 		previous?.Dispose();
 		UpdateStatus();
 	}
@@ -140,8 +150,7 @@ public sealed class RecordingPage : UserControl
 	{
 		if (disposing)
 		{
-			_previewTimer.Stop();
-			_previewTimer.Dispose();
+			_controller.PreviewFrameUpdated -= OnPreviewFrameUpdated;
 			_previewBox.Image?.Dispose();
 		}
 
