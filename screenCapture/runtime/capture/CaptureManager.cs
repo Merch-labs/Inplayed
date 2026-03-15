@@ -25,6 +25,7 @@ public sealed class CaptureManager : IDisposable
 	private const long PreviewIntervalMs = 33;
 	private byte[] _sourcePreviewRowBuffer = Array.Empty<byte>();
 	private byte[] _previewRowBuffer = Array.Empty<byte>();
+	private int _previewEnabled;
 
 	public event Action<Bitmap>? PreviewFrameReady;
 
@@ -162,6 +163,11 @@ public sealed class CaptureManager : IDisposable
 		return (enqueued, encoded, dropped, pending);
 	}
 
+	public void SetPreviewEnabled(bool enabled)
+	{
+		Interlocked.Exchange(ref _previewEnabled, enabled ? 1 : 0);
+	}
+
 	public void Dispose()
 	{
 		StopAsync().GetAwaiter().GetResult();
@@ -173,6 +179,17 @@ public sealed class CaptureManager : IDisposable
 
 	private void TryEmitPreview(TextureFrameRef frame)
 	{
+		if (Interlocked.CompareExchange(ref _previewEnabled, 0, 0) == 0)
+		{
+			return;
+		}
+
+		var handler = PreviewFrameReady;
+		if (handler == null)
+		{
+			return;
+		}
+
 		var now = Environment.TickCount64;
 		if (now - Interlocked.Read(ref _lastPreviewTimestampMs) < PreviewIntervalMs)
 		{
@@ -227,15 +244,7 @@ public sealed class CaptureManager : IDisposable
 			}
 
 			Interlocked.Exchange(ref _lastPreviewTimestampMs, now);
-			var handler = PreviewFrameReady;
-			if (handler != null)
-			{
-				handler(bitmap);
-			}
-			else
-			{
-				bitmap.Dispose();
-			}
+			handler(bitmap);
 		}
 		finally
 		{

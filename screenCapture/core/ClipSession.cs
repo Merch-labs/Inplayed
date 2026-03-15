@@ -8,6 +8,7 @@ public sealed class ClipSession : IDisposable
 	private ICaptureSource? _captureSource;
 	private IHardwareEncoder? _encoder;
 	private CaptureManager? _captureManager;
+	private bool _previewEnabled;
 
 	public event Action<string>? StatusChanged;
 	public event Action<Bitmap>? PreviewFrameReady;
@@ -29,6 +30,7 @@ public sealed class ClipSession : IDisposable
 		StatusChanged?.Invoke($"encoderPolicy:{HardwareEncoderFactory.GetSelectionDebug(Settings)}");
 		_encoder = HardwareEncoderFactory.Create(Settings);
 		_captureManager = new CaptureManager(_captureSource, _encoder);
+		_captureManager.SetPreviewEnabled(_previewEnabled);
 		_captureManager.PreviewFrameReady += OnPreviewFrameReady;
 
 		try
@@ -94,6 +96,12 @@ public sealed class ClipSession : IDisposable
 			TimeSpan.FromSeconds(Settings.ClipSeconds),
 			endTimestampMs,
 			CancellationToken.None);
+	}
+
+	public void SetPreviewEnabled(bool enabled)
+	{
+		_previewEnabled = enabled;
+		_captureManager?.SetPreviewEnabled(enabled);
 	}
 
 	public string GetDebugStatus()

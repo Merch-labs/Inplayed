@@ -13,8 +13,30 @@ public sealed class CaptureController : IDisposable
 	private readonly AudioRecorder _systemRecorder = new();
 	private bool _disposed;
 	private bool _sessionStarting;
+	private Action<Bitmap>? _previewFrameUpdated;
+	private int _previewSubscriberCount;
 
-	public event Action<Bitmap>? PreviewFrameUpdated;
+	public event Action<Bitmap> PreviewFrameUpdated
+	{
+		add
+		{
+			lock (_sync)
+			{
+				_previewFrameUpdated += value;
+				_previewSubscriberCount++;
+				UpdatePreviewStateLocked();
+			}
+		}
+		remove
+		{
+			lock (_sync)
+			{
+				_previewFrameUpdated -= value;
+				_previewSubscriberCount = Math.Max(0, _previewSubscriberCount - 1);
+				UpdatePreviewStateLocked();
+			}
+		}
+	}
 
 	public Task StartCapture()
 	{
@@ -48,6 +70,7 @@ public sealed class CaptureController : IDisposable
 			lock (_sync)
 			{
 				_session = session;
+				UpdatePreviewStateLocked();
 			}
 		}
 		catch
@@ -262,7 +285,7 @@ public sealed class CaptureController : IDisposable
 
 	private void OnPreviewFrameReady(Bitmap frame)
 	{
-		var handler = PreviewFrameUpdated;
+		var handler = _previewFrameUpdated;
 		if (handler != null)
 		{
 			handler(frame);
@@ -298,5 +321,10 @@ public sealed class CaptureController : IDisposable
 		{
 			throw new ObjectDisposedException(nameof(CaptureController));
 		}
+	}
+
+	private void UpdatePreviewStateLocked()
+	{
+		_session?.SetPreviewEnabled(_previewSubscriberCount > 0);
 	}
 }
