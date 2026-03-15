@@ -293,14 +293,14 @@ public sealed class CaptureManager : IDisposable
 		var sourceRowBytes = sourceWidth * 4;
 		if (_sourcePreviewRowBuffer.Length < sourceRowBytes)
 		{
-			_sourcePreviewRowBuffer = new byte[sourceRowBytes];
+			_sourcePreviewRowBuffer = GC.AllocateUninitializedArray<byte>(sourceRowBytes);
 		}
 
 		var (previewWidth, _) = PreviewFrameSizer.GetScaledSize(sourceWidth, sourceHeight);
 		var previewRowBytes = previewWidth * 4;
 		if (_previewRowBuffer.Length < previewRowBytes)
 		{
-			_previewRowBuffer = new byte[previewRowBytes];
+			_previewRowBuffer = GC.AllocateUninitializedArray<byte>(previewRowBytes);
 		}
 	}
 

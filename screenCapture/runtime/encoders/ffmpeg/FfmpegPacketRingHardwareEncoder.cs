@@ -421,7 +421,7 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 		}
 
 		var stream = _ffmpeg.StandardOutput.BaseStream;
-		var readBuffer = new byte[64 * 1024];
+		var readBuffer = GC.AllocateUninitializedArray<byte>(64 * 1024);
 
 		while (true)
 		{

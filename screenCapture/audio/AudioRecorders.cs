@@ -152,7 +152,7 @@ internal sealed class AudioRingBuffer
 
 	private AudioRingBuffer(int capacity, int averageBytesPerSecond, int blockAlign)
 	{
-		_buffer = new byte[capacity];
+		_buffer = GC.AllocateUninitializedArray<byte>(capacity);
 		_averageBytesPerSecond = Math.Max(1, averageBytesPerSecond);
 		_blockAlign = Math.Max(1, blockAlign);
 	}
