@@ -7,6 +7,7 @@ internal sealed class AppConfig
 	public bool? NativeNvencEnabled { get; init; }
 	public HotkeyConfig SaveClipHotkey { get; init; } = new();
 	public RecordingConfig Recording { get; init; } = new();
+	public StartupConfig Startup { get; init; } = new();
 
 	public static AppConfig Load() => AppConfigStorage.Load();
 	public static AppConfig CreateDefault() => AppConfigStorage.CreateDefault();
@@ -71,5 +72,12 @@ internal sealed class AppConfig
 		public string Mode { get; init; } = CaptureTargetModes.PrimaryMonitor;
 		public int MonitorIndex { get; init; }
 		public string ExecutablePath { get; init; } = string.Empty;
+	}
+
+	internal sealed class StartupConfig
+	{
+		public bool LaunchOnWindowsStartup { get; init; }
+		public bool StartHiddenOnWindowsStartup { get; init; } = true;
+		public bool AutoStartCaptureWhenHiddenLaunch { get; init; } = true;
 	}
 }

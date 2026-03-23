@@ -19,6 +19,9 @@ public sealed class SettingsPage : UserControl
 	private readonly CheckBox _shiftModifierCheckBox;
 	private readonly CheckBox _winModifierCheckBox;
 	private readonly ComboBox _hotkeyComboBox;
+	private readonly CheckBox _launchOnWindowsStartupCheckBox;
+	private readonly CheckBox _startHiddenOnWindowsStartupCheckBox;
+	private readonly CheckBox _autoStartCaptureWhenHiddenLaunchCheckBox;
 	private readonly Label _configPathLabel;
 	private readonly Label _statusLabel;
 	private readonly Action? _onSettingsSaved;
@@ -31,11 +34,12 @@ public sealed class SettingsPage : UserControl
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 7,
+			RowCount = 8,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
+		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -217,6 +221,46 @@ public sealed class SettingsPage : UserControl
 		hotkeyLayout.Controls.Add(_hotkeyComboBox);
 		hotkeyGroup.Controls.Add(hotkeyLayout);
 
+		var startupGroup = new GroupBox
+		{
+			AutoSize = true,
+			Dock = DockStyle.Top,
+			Text = "Startup And Background",
+			Padding = new Padding(10)
+		};
+
+		var startupLayout = new FlowLayoutPanel
+		{
+			AutoSize = true,
+			Dock = DockStyle.Fill,
+			FlowDirection = FlowDirection.TopDown,
+			WrapContents = false
+		};
+
+		_launchOnWindowsStartupCheckBox = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Launch inplayed when I sign in to Windows"
+		};
+		_startHiddenOnWindowsStartupCheckBox = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Launch hidden in the background"
+		};
+		_autoStartCaptureWhenHiddenLaunchCheckBox = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Auto-start capture on hidden launch"
+		};
+
+		_launchOnWindowsStartupCheckBox.CheckedChanged += (_, _) => UpdateStartupInputs();
+		_startHiddenOnWindowsStartupCheckBox.CheckedChanged += (_, _) => UpdateStartupInputs();
+
+		startupLayout.Controls.Add(_launchOnWindowsStartupCheckBox);
+		startupLayout.Controls.Add(_startHiddenOnWindowsStartupCheckBox);
+		startupLayout.Controls.Add(_autoStartCaptureWhenHiddenLaunchCheckBox);
+		startupGroup.Controls.Add(startupLayout);
+
 		_configPathLabel = new Label
 		{
 			AutoSize = true
@@ -259,9 +303,10 @@ public sealed class SettingsPage : UserControl
 		root.Controls.Add(recordingGroup, 0, 1);
 		root.Controls.Add(captureTargetGroup, 0, 2);
 		root.Controls.Add(hotkeyGroup, 0, 3);
-		root.Controls.Add(_configPathLabel, 0, 4);
-		root.Controls.Add(actions, 0, 5);
-		root.Controls.Add(_statusLabel, 0, 6);
+		root.Controls.Add(startupGroup, 0, 4);
+		root.Controls.Add(_configPathLabel, 0, 5);
+		root.Controls.Add(actions, 0, 6);
+		root.Controls.Add(_statusLabel, 0, 7);
 
 		Controls.Add(root);
 		UiTheme.ApplyPalette(this);
@@ -296,6 +341,10 @@ public sealed class SettingsPage : UserControl
 		UpdateCaptureTargetInputs();
 		ApplyModifiers(config.SaveClipHotkey.Modifiers);
 		SelectHotkeyKey(config.SaveClipHotkey.Key);
+		_launchOnWindowsStartupCheckBox.Checked = config.Startup.LaunchOnWindowsStartup;
+		_startHiddenOnWindowsStartupCheckBox.Checked = config.Startup.StartHiddenOnWindowsStartup;
+		_autoStartCaptureWhenHiddenLaunchCheckBox.Checked = config.Startup.AutoStartCaptureWhenHiddenLaunch;
+		UpdateStartupInputs();
 	}
 
 	private void SaveSettings()
@@ -327,10 +376,24 @@ public sealed class SettingsPage : UserControl
 					MonitorIndex = (int)_monitorIndexInput.Value,
 					ExecutablePath = _executablePathTextBox.Text.Trim()
 				}
+			},
+			Startup = new AppConfig.StartupConfig
+			{
+				LaunchOnWindowsStartup = _launchOnWindowsStartupCheckBox.Checked,
+				StartHiddenOnWindowsStartup = _startHiddenOnWindowsStartupCheckBox.Checked,
+				AutoStartCaptureWhenHiddenLaunch = _autoStartCaptureWhenHiddenLaunchCheckBox.Checked
 			}
 		};
 
 		AppConfig.Save(config);
+		if (!WindowsStartupRegistration.TryApply(config.Startup, out var startupError))
+		{
+			_configPathLabel.Text = $"Config: {AppConfig.GetConfigPath()}";
+			_statusLabel.Text = $"Status: saved, but Windows startup failed: {startupError}";
+			_onSettingsSaved?.Invoke();
+			return;
+		}
+
 		_configPathLabel.Text = $"Config: {AppConfig.GetConfigPath()}";
 		_statusLabel.Text = "Status: saved";
 		_onSettingsSaved?.Invoke();
@@ -421,6 +484,14 @@ public sealed class SettingsPage : UserControl
 		if (_winModifierCheckBox.Checked) parts.Add("Windows");
 
 		return parts.Count > 0 ? string.Join("+", parts) : "Alt";
+	}
+
+	private void UpdateStartupInputs()
+	{
+		var launchOnWindowsStartup = _launchOnWindowsStartupCheckBox.Checked;
+		_startHiddenOnWindowsStartupCheckBox.Enabled = launchOnWindowsStartup;
+		_autoStartCaptureWhenHiddenLaunchCheckBox.Enabled =
+			launchOnWindowsStartup && _startHiddenOnWindowsStartupCheckBox.Checked;
 	}
 
 	private static object[] GetKeyOptions()

@@ -6,7 +6,10 @@ namespace inplayed;
 public sealed class MainForm : Form
 {
 	private readonly CaptureController _captureController = new();
+	private readonly AppLaunchOptions _launchOptions;
 	private GlobalHotkey? _saveClipHotkey;
+	private readonly NotifyIcon _trayIcon;
+	private readonly ContextMenuStrip _trayMenu;
 	private readonly Panel _topBarPanel;
 	private readonly Label _topBarTitle;
 	private readonly Panel _bodyPanel;
@@ -15,9 +18,12 @@ public sealed class MainForm : Form
 	private readonly Panel _contentPanel;
 	private readonly Dictionary<string, UserControl> _pages = new(StringComparer.OrdinalIgnoreCase);
 	private readonly Dictionary<string, Button> _sidebarButtonsByPage = new(StringComparer.OrdinalIgnoreCase);
+	private bool _allowExit;
+	private bool _hiddenToTray;
 
-	public MainForm()
+	internal MainForm(AppLaunchOptions? launchOptions = null)
 	{
+		_launchOptions = launchOptions ?? new AppLaunchOptions();
 		AutoScaleMode = AutoScaleMode.Dpi;
 		AutoScaleDimensions = new SizeF(96F, 96F);
 
@@ -73,6 +79,23 @@ public sealed class MainForm : Form
 			Padding = new Padding(UiScale.Px(this, 12))
 		};
 
+		_trayMenu = new ContextMenuStrip();
+		_trayMenu.Items.Add("Open inplayed", null, (_, _) => ShowFromTray());
+		_trayMenu.Items.Add("Start Capture", null, async (_, _) => await StartCaptureFromTrayAsync());
+		_trayMenu.Items.Add("Stop Capture", null, async (_, _) => await StopCaptureFromTrayAsync());
+		_trayMenu.Items.Add("Save Clip", null, async (_, _) => await SaveClipFromTrayAsync());
+		_trayMenu.Items.Add(new ToolStripSeparator());
+		_trayMenu.Items.Add("Exit", null, (_, _) => ExitApplication());
+
+		_trayIcon = new NotifyIcon
+		{
+			Text = "inplayed",
+			Icon = SystemIcons.Application,
+			ContextMenuStrip = _trayMenu,
+			Visible = true
+		};
+		_trayIcon.DoubleClick += (_, _) => ShowFromTray();
+
 		_sidebarPanel.Controls.Add(_sidebarButtons);
 
 		_bodyPanel.Controls.Add(_contentPanel);
@@ -86,7 +109,7 @@ public sealed class MainForm : Form
 		AddSidebarButton("social", (_, _) => ShowPage("social"));
 		AddSidebarButton("settings", (_, _) => ShowPage("settings"));
 		ShowPage("recording");
-		ReloadSaveClipHotkey();
+		ApplySettings();
 	}
 
 	public Button AddSidebarButton(string name, EventHandler? onClick = null)
@@ -128,7 +151,7 @@ public sealed class MainForm : Form
 				"recording" => new RecordingPage(_captureController),
 				"library" => new LibraryPage(),
 				"social" => new SocialPage(),
-				"settings" => new SettingsPage(ReloadSaveClipHotkey),
+				"settings" => new SettingsPage(ApplySettings),
 				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
 			};
 
@@ -140,6 +163,21 @@ public sealed class MainForm : Form
 		_contentPanel.Controls.Add(page);
 		_topBarTitle.Text = char.ToUpperInvariant(key[0]) + key[1..];
 		UpdateSidebarSelection(key);
+	}
+
+	public void StartHiddenMode()
+	{
+		ShowInTaskbar = false;
+		if (!IsHandleCreated)
+		{
+			_ = Handle;
+		}
+
+		HideToTray(showNotification: false);
+		if (_launchOptions.AutoStartCapture)
+		{
+			BeginInvoke(async () => await StartCaptureFromTrayAsync());
+		}
 	}
 
 	private Image LoadIcon(string name)
@@ -189,10 +227,129 @@ public sealed class MainForm : Form
 		};
 	}
 
+	private void ApplySettings()
+	{
+		ReloadSaveClipHotkey();
+		UpdateTrayTooltip();
+	}
+
+	private void UpdateTrayTooltip()
+	{
+		var sessionStatus = _captureController.GetSessionStatus();
+		_trayIcon.Text = sessionStatus.Length > 50
+			? $"inplayed - {sessionStatus[..47]}..."
+			: $"inplayed - {sessionStatus}";
+	}
+
+	private void ShowFromTray()
+	{
+		_hiddenToTray = false;
+		ShowInTaskbar = true;
+		Show();
+		WindowState = FormWindowState.Normal;
+		Activate();
+	}
+
+	private void HideToTray(bool showNotification)
+	{
+		_hiddenToTray = true;
+		ShowInTaskbar = false;
+		Hide();
+
+		if (showNotification)
+		{
+			_trayIcon.BalloonTipTitle = "inplayed";
+			_trayIcon.BalloonTipText = "Still running in the background for clipping.";
+			_trayIcon.ShowBalloonTip(2000);
+		}
+	}
+
+	private async Task StartCaptureFromTrayAsync()
+	{
+		try
+		{
+			await _captureController.StartCapture();
+		}
+		catch (Exception ex)
+		{
+			ShowTrayError("Start capture failed", ex.Message);
+		}
+
+		UpdateTrayTooltip();
+	}
+
+	private async Task StopCaptureFromTrayAsync()
+	{
+		try
+		{
+			await _captureController.StopCapture();
+		}
+		catch (Exception ex)
+		{
+			ShowTrayError("Stop capture failed", ex.Message);
+		}
+
+		UpdateTrayTooltip();
+	}
+
+	private async Task SaveClipFromTrayAsync()
+	{
+		try
+		{
+			await _captureController.SaveClip();
+		}
+		catch (Exception ex)
+		{
+			ShowTrayError("Save clip failed", ex.Message);
+		}
+
+		UpdateTrayTooltip();
+	}
+
+	private void ShowTrayError(string title, string message)
+	{
+		if (Visible)
+		{
+			MessageBox.Show(this, message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return;
+		}
+
+		_trayIcon.BalloonTipTitle = title;
+		_trayIcon.BalloonTipText = message;
+		_trayIcon.ShowBalloonTip(2500);
+	}
+
+	private bool ShouldCloseToTray()
+	{
+		var config = AppConfig.Load();
+		return _launchOptions.StartHidden || config.Startup.LaunchOnWindowsStartup;
+	}
+
+	private void ExitApplication()
+	{
+		_allowExit = true;
+		Close();
+	}
+
+	protected override void OnFormClosing(FormClosingEventArgs e)
+	{
+		if (!_allowExit && e.CloseReason == CloseReason.UserClosing && ShouldCloseToTray())
+		{
+			e.Cancel = true;
+			HideToTray(showNotification: !_hiddenToTray);
+			return;
+		}
+
+		base.OnFormClosing(e);
+	}
+
 	protected override void Dispose(bool disposing)
 	{
 		if (disposing)
 		{
+			_trayIcon.Visible = false;
+			_trayIcon.Dispose();
+			_trayMenu.Dispose();
 			_saveClipHotkey?.Dispose();
 			_captureController.Dispose();
 		}

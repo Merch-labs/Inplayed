@@ -20,6 +20,36 @@ public sealed class RecordingPipelineTests
 		Assert.Equal(CaptureTargetModes.PrimaryMonitor, config.Recording.CaptureTarget.Mode);
 		Assert.Equal(0, config.Recording.CaptureTarget.MonitorIndex);
 		Assert.Equal(string.Empty, config.Recording.CaptureTarget.ExecutablePath);
+		Assert.False(config.Startup.LaunchOnWindowsStartup);
+		Assert.True(config.Startup.StartHiddenOnWindowsStartup);
+		Assert.True(config.Startup.AutoStartCaptureWhenHiddenLaunch);
+	}
+
+	[Fact]
+	public void AppLaunchOptions_FromBackgroundArgument_UsesStartupSettings()
+	{
+		var config = new AppConfig
+		{
+			Startup = new AppConfig.StartupConfig
+			{
+				LaunchOnWindowsStartup = true,
+				StartHiddenOnWindowsStartup = true,
+				AutoStartCaptureWhenHiddenLaunch = false
+			}
+		};
+
+		var options = AppLaunchOptions.From([AppLaunchOptions.BackgroundArgument], config);
+
+		Assert.True(options.StartHidden);
+		Assert.False(options.AutoStartCapture);
+	}
+
+	[Fact]
+	public void WindowsStartupRegistration_BuildCommand_QuotesExecutablePathAndAddsBackgroundArgument()
+	{
+		var command = WindowsStartupRegistration.BuildRegistrationCommand(@"C:\Program Files\inplayed\inplayed.exe");
+
+		Assert.Equal("\"C:\\Program Files\\inplayed\\inplayed.exe\" --background", command);
 	}
 
 	[Fact]

@@ -26,6 +26,12 @@ internal static class AppConfigStorage
 				MonitorIndex = 0,
 				ExecutablePath = string.Empty
 			}
+		},
+		Startup = new AppConfig.StartupConfig
+		{
+			LaunchOnWindowsStartup = false,
+			StartHiddenOnWindowsStartup = true,
+			AutoStartCaptureWhenHiddenLaunch = true
 		}
 	};
 
@@ -69,6 +75,12 @@ internal static class AppConfigStorage
 					MonitorIndex = Default.Recording.CaptureTarget.MonitorIndex,
 					ExecutablePath = Default.Recording.CaptureTarget.ExecutablePath
 				}
+			},
+			Startup = new AppConfig.StartupConfig
+			{
+				LaunchOnWindowsStartup = Default.Startup.LaunchOnWindowsStartup,
+				StartHiddenOnWindowsStartup = Default.Startup.StartHiddenOnWindowsStartup,
+				AutoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch
 			}
 		};
 	}
@@ -158,6 +170,15 @@ internal static class AppConfigStorage
 				return false;
 			}
 
+			var startup = TryReadStartup(root, out var parsedStartup)
+				? parsedStartup
+				: new AppConfig.StartupConfig
+				{
+					LaunchOnWindowsStartup = Default.Startup.LaunchOnWindowsStartup,
+					StartHiddenOnWindowsStartup = Default.Startup.StartHiddenOnWindowsStartup,
+					AutoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch
+				};
+
 			config = new AppConfig
 			{
 				NativeNvencEnabled = nativeNvencElement.GetBoolean(),
@@ -174,7 +195,8 @@ internal static class AppConfigStorage
 					IncludeMicAudio = includeMicAudio,
 					IncludeSystemAudio = includeSystemAudio,
 					CaptureTarget = captureTarget
-				}
+				},
+				Startup = startup
 			};
 			return true;
 		}
@@ -220,6 +242,13 @@ internal static class AppConfigStorage
 			writer.WriteString("executablePath", config.Recording.CaptureTarget.ExecutablePath);
 			writer.WriteEndObject();
 			writer.WriteEndObject();
+
+			writer.WriteStartObject("startup");
+			writer.WriteBoolean("launchOnWindowsStartup", config.Startup.LaunchOnWindowsStartup);
+			writer.WriteBoolean("startHiddenOnWindowsStartup", config.Startup.StartHiddenOnWindowsStartup);
+			writer.WriteBoolean("autoStartCaptureWhenHiddenLaunch", config.Startup.AutoStartCaptureWhenHiddenLaunch);
+			writer.WriteEndObject();
+
 			writer.WriteEndObject();
 			writer.Flush();
 		}
@@ -273,6 +302,53 @@ internal static class AppConfigStorage
 			Mode = mode,
 			MonitorIndex = monitorIndex,
 			ExecutablePath = executablePath
+		};
+		return true;
+	}
+
+	private static bool TryReadStartup(JsonElement root, out AppConfig.StartupConfig startup)
+	{
+		startup = new AppConfig.StartupConfig
+		{
+			LaunchOnWindowsStartup = Default.Startup.LaunchOnWindowsStartup,
+			StartHiddenOnWindowsStartup = Default.Startup.StartHiddenOnWindowsStartup,
+			AutoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch
+		};
+
+		if (!root.TryGetProperty("startup", out var startupElement))
+		{
+			return false;
+		}
+
+		if (startupElement.ValueKind != JsonValueKind.Object)
+		{
+			return false;
+		}
+
+		if (!TryReadBool(startupElement, "launchOnWindowsStartup", out var launchOnWindowsStartup))
+		{
+			return false;
+		}
+
+		var startHiddenOnWindowsStartup = Default.Startup.StartHiddenOnWindowsStartup;
+		if (startupElement.TryGetProperty("startHiddenOnWindowsStartup", out _)
+			&& !TryReadBool(startupElement, "startHiddenOnWindowsStartup", out startHiddenOnWindowsStartup))
+		{
+			return false;
+		}
+
+		var autoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch;
+		if (startupElement.TryGetProperty("autoStartCaptureWhenHiddenLaunch", out _)
+			&& !TryReadBool(startupElement, "autoStartCaptureWhenHiddenLaunch", out autoStartCaptureWhenHiddenLaunch))
+		{
+			return false;
+		}
+
+		startup = new AppConfig.StartupConfig
+		{
+			LaunchOnWindowsStartup = launchOnWindowsStartup,
+			StartHiddenOnWindowsStartup = startHiddenOnWindowsStartup,
+			AutoStartCaptureWhenHiddenLaunch = autoStartCaptureWhenHiddenLaunch
 		};
 		return true;
 	}

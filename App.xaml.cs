@@ -14,8 +14,17 @@ public partial class App : System.Windows.Application
 		Forms.Application.EnableVisualStyles();
 		Forms.Application.SetCompatibleTextRenderingDefault(false);
 
-		var form = new MainForm();
+		var config = AppConfig.Load();
+		var launchOptions = AppLaunchOptions.From(e.Args, config);
+		var form = new MainForm(launchOptions);
 		form.FormClosed += (_, _) => Shutdown();
+
+		if (launchOptions.StartHidden)
+		{
+			form.StartHiddenMode();
+			return;
+		}
+
 		form.Show();
 	}
 }
