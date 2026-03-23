@@ -5,12 +5,6 @@ namespace inplayed;
 
 public sealed class MainForm : Form
 {
-	private static readonly Color ShellBackground = Color.FromArgb(243, 246, 250);
-	private static readonly Color SurfaceBackground = Color.White;
-	private static readonly Color SidebarBackground = Color.FromArgb(28, 35, 45);
-	private static readonly Color SidebarHover = Color.FromArgb(41, 51, 65);
-	private static readonly Color SidebarActive = Color.FromArgb(66, 101, 186);
-	private static readonly Color TitleColor = Color.FromArgb(33, 40, 48);
 	private readonly CaptureController _captureController = new();
 	private GlobalHotkey? _saveClipHotkey;
 	private readonly Panel _topBarPanel;
@@ -32,20 +26,20 @@ public sealed class MainForm : Form
 		Height = UiScale.Px(this, 700);
 		StartPosition = FormStartPosition.CenterScreen;
 		MinimumSize = new Size(UiScale.Px(this, 900), UiScale.Px(this, 550));
-		BackColor = ShellBackground;
+		BackColor = UiTheme.ShellBackground;
 
 		_topBarPanel = new Panel
 		{
 			Dock = DockStyle.Top,
 			Height = UiScale.Px(this, 48),
-			BackColor = SurfaceBackground
+			BackColor = UiTheme.SurfaceBackground
 		};
 		_topBarTitle = new Label
 		{
 			Dock = DockStyle.Fill,
 			TextAlign = ContentAlignment.MiddleLeft,
 			Padding = new Padding(UiScale.Px(this, 12), 0, 0, 0),
-			ForeColor = TitleColor,
+			ForeColor = UiTheme.TitleColor,
 			Font = new Font("Segoe UI Semibold", 12f, FontStyle.Regular, GraphicsUnit.Point)
 		};
 		_topBarPanel.Controls.Add(_topBarTitle);
@@ -53,14 +47,14 @@ public sealed class MainForm : Form
 		_bodyPanel = new Panel
 		{
 			Dock = DockStyle.Fill,
-			BackColor = ShellBackground
+			BackColor = UiTheme.ShellBackground
 		};
 
 		_sidebarPanel = new Panel
 		{
 			Dock = DockStyle.Left,
 			Width = UiScale.Px(this, 70),
-			BackColor = SidebarBackground
+			BackColor = UiTheme.SidebarBackground
 		};
 
 		_sidebarButtons = new FlowLayoutPanel
@@ -75,7 +69,7 @@ public sealed class MainForm : Form
 		_contentPanel = new Panel
 		{
 			Dock = DockStyle.Fill,
-			BackColor = ShellBackground,
+			BackColor = UiTheme.ShellBackground,
 			Padding = new Padding(UiScale.Px(this, 12))
 		};
 
@@ -101,19 +95,18 @@ public sealed class MainForm : Form
 		{
 			BackgroundImage = LoadIcon(name),
 			BackgroundImageLayout = ImageLayout.Zoom,
-			BackColor = SidebarBackground,
+			BackColor = UiTheme.SidebarBackground,
 			ForeColor = Color.White,
 			FlatStyle = FlatStyle.Flat,
 			Width = UiScale.Px(this, 70),
 			Height = UiScale.Px(this, 70),
 			Margin = new Padding(0, 0, 0, 0),
 			TextAlign = ContentAlignment.MiddleLeft,
-			Tag = name,
 			UseVisualStyleBackColor = false
 		};
 		button.FlatAppearance.BorderSize = 0;
-		button.FlatAppearance.MouseOverBackColor = SidebarHover;
-		button.FlatAppearance.MouseDownBackColor = SidebarActive;
+		button.FlatAppearance.MouseOverBackColor = UiTheme.SidebarHover;
+		button.FlatAppearance.MouseDownBackColor = UiTheme.SidebarActive;
 
 
 		if (onClick != null)
@@ -145,13 +138,8 @@ public sealed class MainForm : Form
 
 		_contentPanel.Controls.Clear();
 		_contentPanel.Controls.Add(page);
-		_topBarTitle.Text = GetPageTitle(key);
+		_topBarTitle.Text = char.ToUpperInvariant(key[0]) + key[1..];
 		UpdateSidebarSelection(key);
-	}
-
-	private static string GetPageTitle(string key)
-	{
-		return char.ToUpperInvariant(key[0]) + key[1..];    // Capitalize the first letter of the key for display purposes
 	}
 
 	private Image LoadIcon(string name)
@@ -173,7 +161,7 @@ public sealed class MainForm : Form
 		foreach (var entry in _sidebarButtonsByPage)
 		{
 			var isActive = string.Equals(entry.Key, selectedPage, StringComparison.OrdinalIgnoreCase);
-			entry.Value.BackColor = isActive ? SidebarActive : SidebarBackground;
+			entry.Value.BackColor = isActive ? UiTheme.SidebarActive : UiTheme.SidebarBackground;
 		}
 	}
 

@@ -5,11 +5,7 @@ namespace inplayed;
 
 public sealed class RecordingPage : UserControl
 {
-	private static readonly Color PageBackground = Color.FromArgb(243, 246, 250);
 	private static readonly Color PreviewBackground = Color.FromArgb(18, 24, 33);
-	private static readonly Color AccentColor = Color.FromArgb(66, 101, 186);
-	private static readonly Color SecondaryButtonColor = Color.FromArgb(229, 234, 240);
-	private static readonly Color SecondaryTextColor = Color.FromArgb(76, 88, 102);
 	private readonly CaptureController _controller;
 	private readonly PictureBox _previewBox;
 	private readonly Label _statusLabel;
@@ -21,7 +17,7 @@ public sealed class RecordingPage : UserControl
 	public RecordingPage(CaptureController controller)
 	{
 		_controller = controller;
-		BackColor = PageBackground;
+		BackColor = UiTheme.ShellBackground;
 
 		var root = new TableLayoutPanel
 		{
@@ -29,7 +25,7 @@ public sealed class RecordingPage : UserControl
 			RowCount = 3,
 			ColumnCount = 1,
 			Padding = new Padding(16),
-			BackColor = PageBackground
+			BackColor = UiTheme.ShellBackground
 		};
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -41,7 +37,7 @@ public sealed class RecordingPage : UserControl
 			AutoSize = true,
 			Padding = new Padding(12, 12, 12, 8),
 			Text = "Status: stopped",
-			ForeColor = SecondaryTextColor
+			ForeColor = UiTheme.SecondaryTextColor
 		};
 
 		_previewBox = new PictureBox
@@ -64,9 +60,9 @@ public sealed class RecordingPage : UserControl
 		_startButton = new Button { Text = "Start Capture", AutoSize = true };
 		_stopButton = new Button { Text = "Stop Capture", AutoSize = true };
 		_saveButton = new Button { Text = "Save Clip", AutoSize = true };
-		StylePrimaryButton(_startButton);
-		StyleSecondaryButton(_stopButton);
-		StyleSecondaryButton(_saveButton);
+		UiTheme.StyleAccentButton(_startButton);
+		UiTheme.StyleSecondaryButton(_stopButton);
+		UiTheme.StyleSecondaryButton(_saveButton);
 
 		_startButton.Click += async (_, _) => await StartCaptureAsync();
 		_stopButton.Click += async (_, _) => await StopCaptureAsync();
@@ -209,25 +205,5 @@ public sealed class RecordingPage : UserControl
 		}
 
 		base.Dispose(disposing);
-	}
-
-	private static void StylePrimaryButton(Button button)
-	{
-		button.FlatStyle = FlatStyle.Flat;
-		button.FlatAppearance.BorderSize = 0;
-		button.UseVisualStyleBackColor = false;
-		button.BackColor = AccentColor;
-		button.ForeColor = Color.White;
-		button.Padding = new Padding(12, 8, 12, 8);
-	}
-
-	private static void StyleSecondaryButton(Button button)
-	{
-		button.FlatStyle = FlatStyle.Flat;
-		button.FlatAppearance.BorderSize = 0;
-		button.UseVisualStyleBackColor = false;
-		button.BackColor = SecondaryButtonColor;
-		button.ForeColor = SecondaryTextColor;
-		button.Padding = new Padding(12, 8, 12, 8);
 	}
 }
