@@ -77,6 +77,7 @@ public sealed class MainForm : Form
 
 		AddSidebarButton("recording", (_, _) => ShowPage("recording"));
 		AddSidebarButton("library", (_, _) => ShowPage("library"));
+		AddSidebarButton("social", (_, _) => ShowPage("social"));
 		AddSidebarButton("settings", (_, _) => ShowPage("settings"));
 		ShowPage("recording");
 		ReloadSaveClipHotkey();
@@ -114,6 +115,7 @@ public sealed class MainForm : Form
 			{
 				"recording" => new RecordingPage(_captureController),
 				"library" => new LibraryPage(),
+				"social" => new SocialPage(),
 				"settings" => new SettingsPage(ReloadSaveClipHotkey),
 				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
 			};
