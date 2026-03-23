@@ -130,9 +130,9 @@ public sealed class CaptureManager : IDisposable
 				{
 					try
 					{
+						TryEmitPreview(frame);
 						_encoder.Encode(frame);
 						Interlocked.Increment(ref _encodedFrames);
-						TryEmitPreview(frame);
 					}
 					catch
 					{
@@ -309,6 +309,7 @@ public sealed class CaptureManager : IDisposable
 		if (previewWidth == sourceWidth)
 		{
 			System.Runtime.InteropServices.Marshal.Copy(sourceRow, _previewRowBuffer, 0, previewRowBytes);
+			ForceOpaqueAlpha(_previewRowBuffer, previewWidth);
 			return;
 		}
 
@@ -317,6 +318,16 @@ public sealed class CaptureManager : IDisposable
 		{
 			var sourceX = (int)((long)x * sourceWidth / previewWidth);
 			Buffer.BlockCopy(_sourcePreviewRowBuffer, sourceX * 4, _previewRowBuffer, x * 4, 4);
+		}
+
+		ForceOpaqueAlpha(_previewRowBuffer, previewWidth);
+	}
+
+	private static void ForceOpaqueAlpha(byte[] rowBuffer, int width)
+	{
+		for (var x = 0; x < width; x++)
+		{
+			rowBuffer[(x * 4) + 3] = 255;
 		}
 	}
 }
