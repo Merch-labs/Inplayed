@@ -5,6 +5,12 @@ namespace inplayed;
 
 public sealed class SettingsPage : UserControl
 {
+	private static readonly Color PageBackground = Color.FromArgb(243, 246, 250);
+	private static readonly Color SurfaceBackground = Color.White;
+	private static readonly Color AccentColor = Color.FromArgb(66, 101, 186);
+	private static readonly Color AccentHoverColor = Color.FromArgb(55, 88, 164);
+	private static readonly Color SecondaryButtonColor = Color.FromArgb(229, 234, 240);
+	private static readonly Color SecondaryTextColor = Color.FromArgb(76, 88, 102);
 	private readonly CheckBox _nativeNvencCheckBox;
 	private readonly NumericUpDown _fpsInput;
 	private readonly NumericUpDown _bitrateInput;
@@ -26,13 +32,15 @@ public sealed class SettingsPage : UserControl
 	public SettingsPage(Action? onSettingsSaved = null)
 	{
 		_onSettingsSaved = onSettingsSaved;
+		BackColor = PageBackground;
 
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
 			RowCount = 7,
 			ColumnCount = 1,
-			Padding = new Padding(12)
+			Padding = new Padding(12),
+			BackColor = PageBackground
 		};
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -159,6 +167,7 @@ public sealed class SettingsPage : UserControl
 			AutoSize = true,
 			Text = "Browse..."
 		};
+		StyleSecondaryButton(browseExecutableButton);
 		browseExecutableButton.Click += (_, _) => BrowseExecutablePath();
 
 		captureTargetLayout.Controls.Add(new Label { AutoSize = true, Text = "Mode", Margin = new Padding(0, 7, 8, 0) }, 0, 0);
@@ -231,6 +240,10 @@ public sealed class SettingsPage : UserControl
 		var reloadButton = new Button { Text = "Reload", AutoSize = true };
 		var defaultsButton = new Button { Text = "Reset Defaults", AutoSize = true };
 		var openConfigButton = new Button { Text = "Open Config File", AutoSize = true };
+		StyleAccentButton(saveButton);
+		StyleSecondaryButton(reloadButton);
+		StyleSecondaryButton(defaultsButton);
+		StyleSecondaryButton(openConfigButton);
 
 		saveButton.Click += (_, _) => SaveSettings();
 		reloadButton.Click += (_, _) => LoadSettings();
@@ -257,6 +270,7 @@ public sealed class SettingsPage : UserControl
 		root.Controls.Add(_statusLabel, 0, 6);
 
 		Controls.Add(root);
+		ApplyPalette(this);
 		LoadSettings();
 	}
 
@@ -445,6 +459,56 @@ public sealed class SettingsPage : UserControl
 			new CaptureTargetOption("Active Window At Start", CaptureTargetModes.ActiveWindow),
 			new CaptureTargetOption("Executable Path", CaptureTargetModes.ExecutablePath)
 		};
+	}
+
+	private static void ApplyPalette(Control root)
+	{
+		foreach (Control control in root.Controls)
+		{
+			switch (control)
+			{
+				case TableLayoutPanel or FlowLayoutPanel:
+					control.BackColor = PageBackground;
+					break;
+				case GroupBox:
+					control.BackColor = SurfaceBackground;
+					control.ForeColor = SecondaryTextColor;
+					break;
+				case Label:
+					control.ForeColor = SecondaryTextColor;
+					break;
+				case TextBox or ComboBox or NumericUpDown:
+					control.BackColor = SurfaceBackground;
+					control.ForeColor = Color.Black;
+					break;
+			}
+
+			if (control.HasChildren)
+			{
+				ApplyPalette(control);
+			}
+		}
+	}
+
+	private static void StyleAccentButton(Button button)
+	{
+		button.FlatStyle = FlatStyle.Flat;
+		button.FlatAppearance.BorderSize = 0;
+		button.FlatAppearance.MouseOverBackColor = AccentHoverColor;
+		button.BackColor = AccentColor;
+		button.ForeColor = Color.White;
+		button.UseVisualStyleBackColor = false;
+		button.Padding = new Padding(12, 8, 12, 8);
+	}
+
+	private static void StyleSecondaryButton(Button button)
+	{
+		button.FlatStyle = FlatStyle.Flat;
+		button.FlatAppearance.BorderSize = 0;
+		button.BackColor = SecondaryButtonColor;
+		button.ForeColor = SecondaryTextColor;
+		button.UseVisualStyleBackColor = false;
+		button.Padding = new Padding(12, 8, 12, 8);
 	}
 
 	private sealed class CaptureTargetOption

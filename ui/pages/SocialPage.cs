@@ -6,6 +6,12 @@ namespace inplayed;
 
 public sealed class SocialPage : UserControl
 {
+	private static readonly Color PageBackground = Color.FromArgb(243, 246, 250);
+	private static readonly Color SurfaceBackground = Color.White;
+	private static readonly Color AccentColor = Color.FromArgb(66, 101, 186);
+	private static readonly Color AccentHoverColor = Color.FromArgb(55, 88, 164);
+	private static readonly Color SecondaryButtonColor = Color.FromArgb(229, 234, 240);
+	private static readonly Color SecondaryTextColor = Color.FromArgb(76, 88, 102);
 	private readonly BindingSource _friendsSource = new();
 	private readonly TextBox _friendNameInput;
 	private readonly ComboBox _shareFileCombo;
@@ -15,11 +21,14 @@ public sealed class SocialPage : UserControl
 
 	public SocialPage()
 	{
+		BackColor = PageBackground;
+
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
 			RowCount = 2,
-			ColumnCount = 1
+			ColumnCount = 1,
+			BackColor = PageBackground
 		};
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -28,7 +37,8 @@ public sealed class SocialPage : UserControl
 		{
 			AutoSize = true,
 			Padding = new Padding(12, 12, 12, 8),
-			Text = "Social (local mock only): add friends and share clips. No backend connected yet."
+			Text = "Social (local mock only): add friends and share clips. No backend connected yet.",
+			ForeColor = SecondaryTextColor
 		};
 
 		var split = new SplitContainer
@@ -55,6 +65,7 @@ public sealed class SocialPage : UserControl
 		_friendsSource.DataSource = _friends;
 		((ListBox)leftPanel.Controls.Find("friendsList", true)[0]).DataSource = _friendsSource;
 
+		ApplyPalette(this);
 		ReloadShareableFiles();
 	}
 
@@ -83,10 +94,12 @@ public sealed class SocialPage : UserControl
 		var friendName = new TextBox { Width = 170, PlaceholderText = "Friend username" };
 		var addButton = new Button { Text = "Add Friend", AutoSize = true };
 		addButton.Click += (_, _) => AddFriend(friendName.Text);
+		StyleAccentButton(addButton);
 		addRow.Controls.Add(friendName);
 		addRow.Controls.Add(addButton);
 
 		var removeButton = new Button { Text = "Remove Selected", AutoSize = true };
+		StyleSecondaryButton(removeButton);
 		removeButton.Click += (_, _) =>
 		{
 			var list = (ListBox)panel.Controls.Find("friendsList", true)[0];
@@ -153,6 +166,8 @@ public sealed class SocialPage : UserControl
 		};
 		var refreshFilesButton = new Button { Text = "Refresh Clips", AutoSize = true };
 		var shareButton = new Button { Text = "Share", AutoSize = true };
+		StyleSecondaryButton(refreshFilesButton);
+		StyleAccentButton(shareButton);
 		refreshFilesButton.Click += (_, _) => ReloadShareableFiles();
 		shareButton.Click += (_, _) => ShareClip();
 
@@ -255,5 +270,55 @@ public sealed class SocialPage : UserControl
 		var caption = string.IsNullOrWhiteSpace(_captionInput.Text) ? "Shared a clip" : _captionInput.Text.Trim();
 		_captionInput.Clear();
 		_statusLabel.Text = $"Status: queued '{Path.GetFileName(path)}' ({caption}) for sharing when backend is ready";
+	}
+
+	private static void ApplyPalette(Control root)
+	{
+		foreach (Control control in root.Controls)
+		{
+			switch (control)
+			{
+				case TableLayoutPanel or FlowLayoutPanel or SplitContainer:
+					control.BackColor = PageBackground;
+					break;
+				case GroupBox:
+					control.BackColor = SurfaceBackground;
+					control.ForeColor = SecondaryTextColor;
+					break;
+				case Label:
+					control.ForeColor = SecondaryTextColor;
+					break;
+				case ListBox or TextBox or ComboBox:
+					control.BackColor = SurfaceBackground;
+					control.ForeColor = Color.Black;
+					break;
+			}
+
+			if (control.HasChildren)
+			{
+				ApplyPalette(control);
+			}
+		}
+	}
+
+	private static void StyleAccentButton(Button button)
+	{
+		button.FlatStyle = FlatStyle.Flat;
+		button.FlatAppearance.BorderSize = 0;
+		button.FlatAppearance.MouseOverBackColor = AccentHoverColor;
+		button.BackColor = AccentColor;
+		button.ForeColor = Color.White;
+		button.UseVisualStyleBackColor = false;
+		button.Padding = new Padding(12, 8, 12, 8);
+	}
+
+	private static void StyleSecondaryButton(Button button)
+	{
+		button.FlatStyle = FlatStyle.Flat;
+		button.FlatAppearance.BorderSize = 0;
+		button.BackColor = SecondaryButtonColor;
+		button.ForeColor = SecondaryTextColor;
+		button.UseVisualStyleBackColor = false;
+		button.Padding = new Padding(12, 8, 12, 8);
 	}
 }
