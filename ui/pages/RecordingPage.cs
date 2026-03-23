@@ -68,6 +68,7 @@ public sealed class RecordingPage : UserControl
 		root.Controls.Add(actions, 0, 2);
 		Controls.Add(root);
 
+		SubscribePreview();
 		UpdateStatus();
 	}
 
