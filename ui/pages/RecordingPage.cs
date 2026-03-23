@@ -6,12 +6,14 @@ namespace inplayed;
 public sealed class RecordingPage : UserControl
 {
 	private static readonly Color PreviewBackground = Color.FromArgb(18, 24, 33);
+	private static readonly Color PreviewHintColor = Color.FromArgb(214, 222, 232);
 	private readonly CaptureController _controller;
 	private readonly PictureBox _previewBox;
 	private readonly Label _statusLabel;
 	private readonly Button _startButton;
 	private readonly Button _stopButton;
 	private readonly Button _saveButton;
+	private bool _previewEnabled = true;
 	private bool _previewSubscribed;
 
 	public RecordingPage(CaptureController controller)
@@ -45,8 +47,11 @@ public sealed class RecordingPage : UserControl
 			Dock = DockStyle.Fill,
 			SizeMode = PictureBoxSizeMode.Zoom,
 			BackColor = PreviewBackground,
-			BorderStyle = BorderStyle.FixedSingle
+			BorderStyle = BorderStyle.FixedSingle,
+			Cursor = Cursors.Hand
 		};
+		_previewBox.Click += (_, _) => TogglePreview();
+		_previewBox.Paint += OnPreviewBoxPaint;
 
 		var actions = new FlowLayoutPanel
 		{
@@ -167,12 +172,13 @@ public sealed class RecordingPage : UserControl
 
 	private void UpdateStatus()
 	{
-		_statusLabel.Text = $"Status: {_controller.GetSessionStatus()}";
+		var previewState = _previewEnabled ? "on" : "off";
+		_statusLabel.Text = $"Status: {_controller.GetSessionStatus()} | Preview: {previewState}";
 	}
 
 	private void SubscribePreview()
 	{
-		if (_previewSubscribed)
+		if (_previewSubscribed || !_previewEnabled)
 		{
 			return;
 		}
@@ -195,6 +201,40 @@ public sealed class RecordingPage : UserControl
 			_previewBox.Image = null;
 			previous?.Dispose();
 		}
+	}
+
+	private void TogglePreview()
+	{
+		_previewEnabled = !_previewEnabled;
+
+		if (_previewEnabled && Visible)
+		{
+			SubscribePreview();
+		}
+		else
+		{
+			UnsubscribePreview(clearPreview: true);
+		}
+
+		_previewBox.Invalidate();
+		UpdateStatus();
+	}
+
+	private void OnPreviewBoxPaint(object? sender, PaintEventArgs e)
+	{
+		if (_previewEnabled)
+		{
+			return;
+		}
+
+		const string message = "Preview off\nClick to enable";
+		using var format = new StringFormat
+		{
+			Alignment = StringAlignment.Center,
+			LineAlignment = StringAlignment.Center
+		};
+		using var brush = new SolidBrush(PreviewHintColor);
+		e.Graphics.DrawString(message, Font, brush, _previewBox.ClientRectangle, format);
 	}
 
 	protected override void Dispose(bool disposing)
