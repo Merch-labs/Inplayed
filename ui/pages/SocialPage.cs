@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -6,29 +7,30 @@ namespace inplayed;
 
 public sealed class SocialPage : UserControl
 {
-	private static readonly Color PageBackground = Color.FromArgb(243, 246, 250);
-	private static readonly Color SurfaceBackground = Color.White;
-	private static readonly Color AccentColor = Color.FromArgb(66, 101, 186);
-	private static readonly Color AccentHoverColor = Color.FromArgb(55, 88, 164);
-	private static readonly Color SecondaryButtonColor = Color.FromArgb(229, 234, 240);
-	private static readonly Color SecondaryTextColor = Color.FromArgb(76, 88, 102);
+	private static readonly Color ClipBubbleColor = Color.FromArgb(232, 237, 243);
 	private readonly BindingSource _friendsSource = new();
+	private readonly SocialService _socialService = new();
+	private readonly SplitContainer _splitContainer;
+	private readonly ListBox _friendsList;
 	private readonly TextBox _friendNameInput;
-	private readonly ComboBox _shareFileCombo;
-	private readonly TextBox _captionInput;
+	private readonly Button _backButton;
+	private readonly Label _conversationTitleLabel;
+	private readonly FlowLayoutPanel _messagesPanel;
+	private readonly TextBox _messageInput;
+	private readonly Button _sendButton;
 	private readonly Label _statusLabel;
-	private readonly List<string> _friends = new();
 
 	public SocialPage()
 	{
-		BackColor = PageBackground;
+		BackColor = UiTheme.ShellBackground;
 
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
 			RowCount = 2,
 			ColumnCount = 1,
-			BackColor = PageBackground
+			Padding = new Padding(12),
+			BackColor = UiTheme.ShellBackground
 		};
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -36,37 +38,56 @@ public sealed class SocialPage : UserControl
 		var header = new Label
 		{
 			AutoSize = true,
-			Padding = new Padding(12, 12, 12, 8),
-			Text = "Social (local mock only): add friends and share clips. No backend connected yet.",
-			ForeColor = SecondaryTextColor
+			Padding = new Padding(0, 0, 0, 8),
+			Text = "Messages and shared clips from your conversations.",
+			ForeColor = UiTheme.SecondaryTextColor
 		};
 
-		var split = new SplitContainer
+		_splitContainer = new SplitContainer
 		{
 			Dock = DockStyle.Fill,
 			Orientation = Orientation.Vertical,
-			SplitterDistance = 300
+			SplitterDistance = 240,
+			BackColor = UiTheme.ShellBackground
 		};
 
 		var leftPanel = BuildFriendsPanel();
-		var rightPanel = BuildSharePanel();
-		split.Panel1.Controls.Add(leftPanel);
-		split.Panel2.Controls.Add(rightPanel);
+		var rightPanel = BuildConversationPanel();
+		_splitContainer.Panel1.Controls.Add(leftPanel);
+		_splitContainer.Panel2.Controls.Add(rightPanel);
 
 		root.Controls.Add(header, 0, 0);
-		root.Controls.Add(split, 0, 1);
+		root.Controls.Add(_splitContainer, 0, 1);
 		Controls.Add(root);
 
-		_friendNameInput = (TextBox)leftPanel.Tag!;
-		_shareFileCombo = (ComboBox)rightPanel.Tag!;
-		_captionInput = (TextBox)rightPanel.Controls.Find("captionInput", true)[0];
+		_friendNameInput = (TextBox)leftPanel.Controls.Find("friendNameInput", true)[0];
+		_friendsList = (ListBox)leftPanel.Controls.Find("friendsList", true)[0];
+		_backButton = (Button)rightPanel.Controls.Find("backButton", true)[0];
+		_conversationTitleLabel = (Label)rightPanel.Controls.Find("conversationTitleLabel", true)[0];
+		_messagesPanel = (FlowLayoutPanel)rightPanel.Controls.Find("messagesPanel", true)[0];
+		_messageInput = (TextBox)rightPanel.Controls.Find("messageInput", true)[0];
+		_sendButton = (Button)rightPanel.Controls.Find("sendButton", true)[0];
 		_statusLabel = (Label)rightPanel.Controls.Find("statusLabel", true)[0];
 
-		_friendsSource.DataSource = _friends;
-		((ListBox)leftPanel.Controls.Find("friendsList", true)[0]).DataSource = _friendsSource;
+		_friendsSource.DataSource = _socialService.GetFriends().ToList();
+		_friendsList.DataSource = _friendsSource;
+		_friendsList.SelectedIndexChanged += (_, _) => RefreshConversation();
+		_friendsList.DoubleClick += (_, _) => OpenSelectedFriendConversation();
+		_messagesPanel.Resize += (_, _) => ResizeMessageCards();
+		_messageInput.KeyDown += HandleMessageInputKeyDown;
 
-		ApplyPalette(this);
-		ReloadShareableFiles();
+		UiTheme.ApplyPalette(this);
+		RefreshFriends();
+		ShowProfilesOnly();
+	}
+
+	protected override void OnVisibleChanged(EventArgs e)
+	{
+		base.OnVisibleChanged(e);
+		if (Visible)
+		{
+			RefreshFriends(GetSelectedFriend());
+		}
 	}
 
 	private Control BuildFriendsPanel()
@@ -76,249 +97,446 @@ public sealed class SocialPage : UserControl
 			Dock = DockStyle.Fill,
 			RowCount = 4,
 			ColumnCount = 1,
-			Padding = new Padding(12)
+			Padding = new Padding(12),
+			BackColor = UiTheme.ShellBackground
 		};
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
-		var title = new Label { AutoSize = true, Text = "Friends" };
-		var addRow = new FlowLayoutPanel
+		var title = new Label
+		{
+			AutoSize = true,
+			Text = "Friends",
+			ForeColor = UiTheme.SecondaryTextColor
+		};
+
+		var addRow = new TableLayoutPanel
 		{
 			Dock = DockStyle.Top,
 			AutoSize = true,
-			FlowDirection = FlowDirection.LeftToRight,
-			WrapContents = false
+			ColumnCount = 2,
+			BackColor = UiTheme.ShellBackground
 		};
-		var friendName = new TextBox { Width = 170, PlaceholderText = "Friend username" };
-		var addButton = new Button { Text = "Add Friend", AutoSize = true };
-		addButton.Click += (_, _) => AddFriend(friendName.Text);
-		StyleAccentButton(addButton);
-		addRow.Controls.Add(friendName);
-		addRow.Controls.Add(addButton);
+		addRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+		addRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-		var removeButton = new Button { Text = "Remove Selected", AutoSize = true };
-		StyleSecondaryButton(removeButton);
-		removeButton.Click += (_, _) =>
+		var friendName = new TextBox
 		{
-			var list = (ListBox)panel.Controls.Find("friendsList", true)[0];
-			if (list.SelectedItem is string selected)
-			{
-				_friends.Remove(selected);
-				RefreshFriends();
-			}
+			Name = "friendNameInput",
+			Dock = DockStyle.Fill,
+			PlaceholderText = "Friend username"
 		};
+		var addButton = new Button
+		{
+			Text = "Add",
+			AutoSize = true
+		};
+		UiTheme.StyleAccentButton(addButton);
+		addButton.Click += (_, _) => AddFriend(friendName.Text);
+		addRow.Controls.Add(friendName, 0, 0);
+		addRow.Controls.Add(addButton, 1, 0);
+
+		var removeButton = new Button
+		{
+			Text = "Remove Selected",
+			AutoSize = true
+		};
+		UiTheme.StyleSecondaryButton(removeButton);
+		removeButton.Click += (_, _) => RemoveSelectedFriend();
 
 		var friendsList = new ListBox
 		{
 			Name = "friendsList",
-			Dock = DockStyle.Fill
+			Dock = DockStyle.Fill,
+			BackColor = UiTheme.SurfaceBackground
 		};
 
 		panel.Controls.Add(title, 0, 0);
 		panel.Controls.Add(addRow, 0, 1);
 		panel.Controls.Add(removeButton, 0, 2);
 		panel.Controls.Add(friendsList, 0, 3);
-		panel.Tag = friendName;
 		return panel;
 	}
 
-	private Control BuildSharePanel()
+	private Control BuildConversationPanel()
 	{
 		var panel = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 2,
+			RowCount = 4,
 			ColumnCount = 1,
-			Padding = new Padding(12)
+			Padding = new Padding(12),
+			BackColor = UiTheme.ShellBackground
 		};
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-		var shareGroup = new GroupBox
+		var headerRow = new FlowLayoutPanel
 		{
-			Text = "Share a Video",
+			Dock = DockStyle.Fill,
+			AutoSize = true,
+			WrapContents = false,
+			FlowDirection = FlowDirection.LeftToRight,
+			BackColor = UiTheme.ShellBackground
+		};
+
+		var backButton = new Button
+		{
+			Name = "backButton",
+			Text = "Back",
+			AutoSize = true,
+			Visible = false
+		};
+		UiTheme.StyleSecondaryButton(backButton);
+		backButton.Click += (_, _) => ReturnToProfiles();
+
+		var title = new Label
+		{
+			Name = "conversationTitleLabel",
+			AutoSize = true,
+			Padding = new Padding(0, 7, 0, 0),
+			Text = "Select a friend to start messaging",
+			ForeColor = UiTheme.SecondaryTextColor
+		};
+		headerRow.Controls.Add(backButton);
+		headerRow.Controls.Add(title);
+
+		var messagesPanel = new FlowLayoutPanel
+		{
+			Name = "messagesPanel",
+			Dock = DockStyle.Fill,
+			FlowDirection = FlowDirection.TopDown,
+			WrapContents = false,
+			AutoScroll = true,
+			BackColor = UiTheme.SurfaceBackground,
+			Padding = new Padding(12)
+		};
+
+		var messageGroup = new GroupBox
+		{
+			Text = "Send Message",
 			Dock = DockStyle.Top,
 			AutoSize = true
 		};
-		var shareLayout = new TableLayoutPanel
+
+		var messageLayout = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
 			AutoSize = true,
 			ColumnCount = 2,
-			RowCount = 3,
 			Padding = new Padding(8)
 		};
-		shareLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-		shareLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+		messageLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+		messageLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-		var shareFileCombo = new ComboBox
+		var messageInput = new TextBox
 		{
+			Name = "messageInput",
 			Dock = DockStyle.Fill,
-			DropDownStyle = ComboBoxStyle.DropDownList
+			PlaceholderText = "Write a message"
 		};
-		var captionInput = new TextBox
-		{
-			Name = "captionInput",
-			Dock = DockStyle.Fill,
-			PlaceholderText = "Enter a caption"
-		};
-		var refreshFilesButton = new Button { Text = "Refresh Clips", AutoSize = true };
-		var shareButton = new Button { Text = "Share", AutoSize = true };
-		StyleSecondaryButton(refreshFilesButton);
-		StyleAccentButton(shareButton);
-		refreshFilesButton.Click += (_, _) => ReloadShareableFiles();
-		shareButton.Click += (_, _) => ShareClip();
 
-		var buttonRow = new FlowLayoutPanel
+		var sendButton = new Button
 		{
-			AutoSize = true,
-			FlowDirection = FlowDirection.LeftToRight,
-			WrapContents = false,
-			Dock = DockStyle.Fill
+			Name = "sendButton",
+			Text = "Send",
+			AutoSize = true
 		};
-		buttonRow.Controls.Add(refreshFilesButton);
-		buttonRow.Controls.Add(shareButton);
+		UiTheme.StyleAccentButton(sendButton);
+		sendButton.Click += (_, _) => SendMessage();
 
-		shareLayout.Controls.Add(new Label { AutoSize = true, Text = "Video", Margin = new Padding(0, 7, 8, 0) }, 0, 0);
-		shareLayout.Controls.Add(shareFileCombo, 1, 0);
-		shareLayout.Controls.Add(new Label { AutoSize = true, Text = "Caption", Margin = new Padding(0, 7, 8, 0) }, 0, 1);
-		shareLayout.Controls.Add(captionInput, 1, 1);
-		shareLayout.Controls.Add(buttonRow, 1, 2);
-		shareGroup.Controls.Add(shareLayout);
+		messageLayout.Controls.Add(messageInput, 0, 0);
+		messageLayout.Controls.Add(sendButton, 1, 0);
+		messageGroup.Controls.Add(messageLayout);
 
-		var statusRow = new FlowLayoutPanel
-		{
-			Dock = DockStyle.Top,
-			AutoSize = true,
-			FlowDirection = FlowDirection.LeftToRight,
-			WrapContents = false
-		};
 		var statusLabel = new Label
 		{
 			Name = "statusLabel",
 			AutoSize = true,
-			Padding = new Padding(0, 7, 0, 0),
-			Text = "Status: local mock social"
+			Padding = new Padding(0, 8, 0, 0),
+			ForeColor = UiTheme.SecondaryTextColor,
+			Text = "Status: ready"
 		};
-		statusRow.Controls.Add(statusLabel);
 
-		panel.Controls.Add(shareGroup, 0, 0);
-		panel.Controls.Add(statusRow, 0, 1);
-		panel.Tag = shareFileCombo;
+		panel.Controls.Add(headerRow, 0, 0);
+		panel.Controls.Add(messagesPanel, 0, 1);
+		panel.Controls.Add(messageGroup, 0, 2);
+		panel.Controls.Add(statusLabel, 0, 3);
 		return panel;
 	}
 
 	private void AddFriend(string rawName)
 	{
-		var name = rawName.Trim();
-		if (string.IsNullOrWhiteSpace(name))
+		if (!_socialService.AddFriend(rawName, out var normalizedName))
 		{
-			_statusLabel.Text = "Status: enter a friend name";
+			_statusLabel.Text = "Status: enter a unique friend name";
 			return;
 		}
 
-		if (_friends.Any(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase)))
-		{
-			_statusLabel.Text = "Status: friend already exists";
-			return;
-		}
-
-		_friends.Add(name);
 		_friendNameInput.Clear();
-		RefreshFriends();
-		_statusLabel.Text = $"Status: added friend '{name}' (local only)";
+		RefreshFriends(normalizedName);
+		_statusLabel.Text = $"Status: added friend '{normalizedName}'";
 	}
 
-	private void RefreshFriends()
+	private void RemoveSelectedFriend()
 	{
-		_friendsSource.DataSource = null;
-		_friendsSource.DataSource = _friends.OrderBy(name => name).ToList();
-	}
-
-	private void ReloadShareableFiles()
-	{
-		var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "inplayed");
-		Directory.CreateDirectory(folder);
-
-		var files = Directory
-			.EnumerateFiles(folder, "*.mp4")
-			.OrderByDescending(File.GetLastWriteTimeUtc)
-			.ToList();
-
-		_shareFileCombo.DataSource = files;
-		if (_shareFileCombo.Items.Count > 0)
+		var selectedFriend = GetSelectedFriend();
+		if (string.IsNullOrWhiteSpace(selectedFriend))
 		{
-			_shareFileCombo.SelectedIndex = 0;
-			_statusLabel.Text = $"Status: loaded {_shareFileCombo.Items.Count} local clip(s)";
+			_statusLabel.Text = "Status: select a friend to remove";
+			return;
+		}
+
+		if (_socialService.RemoveFriend(selectedFriend))
+		{
+			RefreshFriends();
+			_statusLabel.Text = $"Status: removed '{selectedFriend}'";
+		}
+	}
+
+	private void RefreshFriends(string? selectedFriend = null)
+	{
+		var friends = _socialService.GetFriends().ToList();
+		_friendsSource.DataSource = friends;
+
+		if (friends.Count == 0)
+		{
+			_conversationTitleLabel.Text = "Select a friend to start messaging";
+			_messagesPanel.Controls.Clear();
+			UpdateInteractionState();
+			return;
+		}
+
+		var friendToSelect = selectedFriend;
+		if (string.IsNullOrWhiteSpace(friendToSelect) || !friends.Any(friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase)))
+		{
+			friendToSelect = friends[0];
+		}
+
+		_friendsList.SelectedItem = friends.First(friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase));
+		RefreshConversation();
+	}
+
+	private void RefreshConversation()
+	{
+		var selectedFriend = GetSelectedFriend();
+		_messagesPanel.SuspendLayout();
+		try
+		{
+			_messagesPanel.Controls.Clear();
+			if (!string.IsNullOrWhiteSpace(selectedFriend))
+			{
+				foreach (var message in _socialService.GetMessages(selectedFriend))
+				{
+					_messagesPanel.Controls.Add(BuildMessageCard(message));
+				}
+			}
+		}
+		finally
+		{
+			_messagesPanel.ResumeLayout();
+		}
+
+		_conversationTitleLabel.Text = string.IsNullOrWhiteSpace(selectedFriend)
+			? "Select a friend to start messaging"
+			: $"Conversation with {selectedFriend}";
+
+		ResizeMessageCards();
+		ScrollMessagesToBottom();
+		UpdateInteractionState();
+	}
+
+	private void SendMessage()
+	{
+		var selectedFriend = GetSelectedFriend();
+		if (string.IsNullOrWhiteSpace(selectedFriend))
+		{
+			_statusLabel.Text = "Status: add and select a friend first";
+			return;
+		}
+
+		var message = _socialService.SendTextMessage(selectedFriend, _messageInput.Text);
+		if (message == null)
+		{
+			_statusLabel.Text = "Status: write a message first";
+			return;
+		}
+
+		_messageInput.Clear();
+		RefreshConversation();
+		_statusLabel.Text = $"Status: message sent to {selectedFriend}";
+	}
+
+	private void HandleMessageInputKeyDown(object? sender, KeyEventArgs e)
+	{
+		if (e.KeyCode != Keys.Enter || e.Modifiers != Keys.None)
+		{
+			return;
+		}
+
+		e.SuppressKeyPress = true;
+		SendMessage();
+	}
+
+	private void OpenSelectedFriendConversation()
+	{
+		var selectedFriend = GetSelectedFriend();
+		if (string.IsNullOrWhiteSpace(selectedFriend))
+		{
+			_statusLabel.Text = "Status: select a friend first";
+			return;
+		}
+
+		RefreshConversation();
+		_splitContainer.Panel2Collapsed = false;
+		_splitContainer.Panel1Collapsed = true;
+		_backButton.Visible = true;
+		_messageInput.Focus();
+		_statusLabel.Text = $"Status: opened chat with {selectedFriend}";
+	}
+
+	private void ReturnToProfiles()
+	{
+		ShowProfilesOnly();
+		_statusLabel.Text = "Status: browsing friends";
+	}
+
+	private void OpenSharedClip(SocialMessage message)
+	{
+		if (!string.Equals(message.Kind, SocialMessageKinds.Clip, StringComparison.OrdinalIgnoreCase) ||
+			string.IsNullOrWhiteSpace(message.ClipPath))
+		{
+			_statusLabel.Text = "Status: clip is unavailable";
+			return;
+		}
+
+		if (!File.Exists(message.ClipPath))
+		{
+			_statusLabel.Text = "Status: shared clip file is missing";
+			return;
+		}
+
+		Process.Start(new ProcessStartInfo(message.ClipPath) { UseShellExecute = true });
+		_statusLabel.Text = $"Status: opened {Path.GetFileName(message.ClipPath)}";
+	}
+
+	private string GetSelectedFriend()
+	{
+		return _friendsList.SelectedItem as string ?? string.Empty;
+	}
+
+	private void UpdateInteractionState()
+	{
+		var hasFriend = !string.IsNullOrWhiteSpace(GetSelectedFriend());
+		_sendButton.Enabled = hasFriend;
+		_messageInput.Enabled = hasFriend;
+		_backButton.Visible = _splitContainer.Panel1Collapsed && !_splitContainer.Panel2Collapsed && hasFriend;
+	}
+
+	private void ShowProfilesOnly()
+	{
+		_splitContainer.Panel1Collapsed = false;
+		_splitContainer.Panel2Collapsed = true;
+		_backButton.Visible = false;
+		_friendsList.Focus();
+	}
+
+	private Control BuildMessageCard(SocialMessage message)
+	{
+		var isClip = string.Equals(message.Kind, SocialMessageKinds.Clip, StringComparison.OrdinalIgnoreCase);
+		var card = new Panel
+		{
+			AutoSize = true,
+			BackColor = isClip ? ClipBubbleColor : UiTheme.AccentColor,
+			Padding = new Padding(12),
+			Margin = new Padding(0, 0, 0, 10),
+			Tag = message
+		};
+
+		var layout = new TableLayoutPanel
+		{
+			Dock = DockStyle.Fill,
+			AutoSize = true,
+			ColumnCount = 1,
+			BackColor = Color.Transparent
+		};
+
+		var metaLabel = new Label
+		{
+			AutoSize = true,
+			ForeColor = isClip ? UiTheme.SecondaryTextColor : Color.FromArgb(225, 235, 255),
+			Text = $"{message.Author} - {message.CreatedAtUtc.ToLocalTime():HH:mm}"
+		};
+
+		var bodyLabel = new Label
+		{
+			AutoSize = true,
+			MaximumSize = new Size(420, 0),
+			ForeColor = isClip ? Color.FromArgb(33, 40, 48) : Color.White,
+			Font = new Font("Segoe UI", 10f, FontStyle.Regular, GraphicsUnit.Point),
+			Text = message.Body
+		};
+
+		layout.Controls.Add(metaLabel, 0, 0);
+
+		if (isClip)
+		{
+			var clipNameLabel = new Label
+			{
+				AutoSize = true,
+				MaximumSize = new Size(420, 0),
+				ForeColor = Color.FromArgb(33, 40, 48),
+				Font = new Font("Segoe UI Semibold", 10f, FontStyle.Regular, GraphicsUnit.Point),
+				Text = string.IsNullOrWhiteSpace(message.ClipFileName) ? "Shared clip" : message.ClipFileName
+			};
+
+			var openButton = new Button
+			{
+				AutoSize = true,
+				Text = "Open Clip"
+			};
+			UiTheme.StyleSecondaryButton(openButton);
+			openButton.Click += (_, _) => OpenSharedClip(message);
+
+			layout.Controls.Add(clipNameLabel, 0, 1);
+			layout.Controls.Add(bodyLabel, 0, 2);
+			layout.Controls.Add(openButton, 0, 3);
 		}
 		else
 		{
-			_statusLabel.Text = "Status: no clips found in Videos\\inplayed";
+			layout.Controls.Add(bodyLabel, 0, 1);
 		}
+
+		card.Controls.Add(layout);
+		return card;
 	}
 
-	private void ShareClip()
+	private void ResizeMessageCards()
 	{
-		if (_shareFileCombo.SelectedItem is not string path || string.IsNullOrWhiteSpace(path))
+		if (_messagesPanel.IsDisposed)
 		{
-			_statusLabel.Text = "Status: select a clip to share";
 			return;
 		}
 
-		var caption = string.IsNullOrWhiteSpace(_captionInput.Text) ? "Shared a clip" : _captionInput.Text.Trim();
-		_captionInput.Clear();
-		_statusLabel.Text = $"Status: queued '{Path.GetFileName(path)}' ({caption}) for sharing when backend is ready";
-	}
-
-	private static void ApplyPalette(Control root)
-	{
-		foreach (Control control in root.Controls)
+		var cardWidth = Math.Max(260, _messagesPanel.ClientSize.Width - 36);
+		foreach (Control control in _messagesPanel.Controls)
 		{
-			switch (control)
-			{
-				case TableLayoutPanel or FlowLayoutPanel or SplitContainer:
-					control.BackColor = PageBackground;
-					break;
-				case GroupBox:
-					control.BackColor = SurfaceBackground;
-					control.ForeColor = SecondaryTextColor;
-					break;
-				case Label:
-					control.ForeColor = SecondaryTextColor;
-					break;
-				case ListBox or TextBox or ComboBox:
-					control.BackColor = SurfaceBackground;
-					control.ForeColor = Color.Black;
-					break;
-			}
-
-			if (control.HasChildren)
-			{
-				ApplyPalette(control);
-			}
+			control.Width = cardWidth;
 		}
 	}
 
-	private static void StyleAccentButton(Button button)
+	private void ScrollMessagesToBottom()
 	{
-		button.FlatStyle = FlatStyle.Flat;
-		button.FlatAppearance.BorderSize = 0;
-		button.FlatAppearance.MouseOverBackColor = AccentHoverColor;
-		button.BackColor = AccentColor;
-		button.ForeColor = Color.White;
-		button.UseVisualStyleBackColor = false;
-		button.Padding = new Padding(12, 8, 12, 8);
+		if (_messagesPanel.Controls.Count == 0)
+		{
+			return;
+		}
+
+		_messagesPanel.ScrollControlIntoView(_messagesPanel.Controls[_messagesPanel.Controls.Count - 1]);
 	}
 
-	private static void StyleSecondaryButton(Button button)
-	{
-		button.FlatStyle = FlatStyle.Flat;
-		button.FlatAppearance.BorderSize = 0;
-		button.BackColor = SecondaryButtonColor;
-		button.ForeColor = SecondaryTextColor;
-		button.UseVisualStyleBackColor = false;
-		button.Padding = new Padding(12, 8, 12, 8);
-	}
 }

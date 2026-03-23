@@ -22,4 +22,16 @@
     <ProjectReference Include="..\inplayed.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="bin\**\*.cs" />
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="artifacts\**\*.cs" />
+    <EmbeddedResource Remove="bin\**\*" />
+    <EmbeddedResource Remove="obj\**\*" />
+    <EmbeddedResource Remove="artifacts\**\*" />
+    <None Remove="bin\**\*" />
+    <None Remove="obj\**\*" />
+    <None Remove="artifacts\**\*" />
+  </ItemGroup>
+
 </Project>
