@@ -81,7 +81,6 @@ public static class ActiveTargetResolver
 			}
 			catch
 			{
-				// ignore access denied/system processes
 			}
 			finally
 			{

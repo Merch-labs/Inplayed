@@ -66,7 +66,6 @@ public sealed class FfmpegClipWriter : IClipWriter
 					}
 					catch (IOException)
 					{
-						// Expected when ffmpeg reaches -t and closes stdin early.
 						pipeClosedByFfmpeg = true;
 						break;
 					}
@@ -85,7 +84,6 @@ public sealed class FfmpegClipWriter : IClipWriter
 				}
 				catch (IOException) when (pipeClosedByFfmpeg)
 				{
-					// Expected when ffmpeg already closed stdin after reaching -t.
 				}
 				catch (ObjectDisposedException)
 				{

@@ -125,8 +125,6 @@ internal static class NvencNative
 				return v;
 			}
 
-			// Some code paths represent major version as 0x000B0000 style.
-			// Convert that to the compact 0xB0 style used by the runtime API query.
 			var hi = (v >> 16) & 0xFFFFu;
 			var lo = v & 0xFFFFu;
 			if (lo == 0 && hi > 0 && hi <= 0xFF)

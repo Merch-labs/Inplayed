@@ -138,27 +138,21 @@ public sealed class FfmpegPacketRingHardwareEncoder : IHardwareEncoder
 					Interlocked.Increment(ref _queueDrops);
 					return;
 				}
-				try
-				{
-					for (var y = 0; y < height; y++)
-					{
-						var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
-						Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
-					}
 
-					if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes, frame.Timestamp)))
-					{
-						Interlocked.Increment(ref _queueDrops);
-						ReturnFrameBuffer(buffer);
-						return;
-					}
-
-					Interlocked.Increment(ref _queuedBuffers);
-				}
-				finally
+				for (var y = 0; y < height; y++)
 				{
-					// buffer returned by input writer or on queue drop path
+					var src = IntPtr.Add(dataBox.DataPointer, (int)(y * dataBox.RowPitch));
+					Marshal.Copy(src, buffer, y * rowBytes, rowBytes);
 				}
+
+				if (_inputQueue == null || !_inputQueue.Writer.TryWrite(new PendingInput(buffer, totalBytes, frame.Timestamp)))
+				{
+					Interlocked.Increment(ref _queueDrops);
+					ReturnFrameBuffer(buffer);
+					return;
+				}
+
+				Interlocked.Increment(ref _queuedBuffers);
 			}
 			catch (IOException)
 			{

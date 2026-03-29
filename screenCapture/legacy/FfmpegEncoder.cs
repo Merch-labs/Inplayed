@@ -58,7 +58,6 @@ public sealed class FfmpegEncoder : IVideoEncoder
 
 			if (actualDurationMs < targetDurationMs)
 			{
-				// Clip is shorter than requested; keep frames as-is and adjust fps to avoid freeze/padding.
 				fpsOverride = frames.Count / (actualDurationMs / 1000.0);
 			}
 			else

@@ -658,7 +658,6 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 		}
 		else if (_supportsHevc)
 		{
-			// Current clip mux path is Annex-B H.264 only.
 			_selectedCodecGuid = Guid.Empty;
 			_selectedCodecName = "hevc_not_supported_yet";
 		}
@@ -1565,17 +1564,13 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 
 	private static bool IsRetryableLockFailure(int lockRc, bool doNotWait)
 	{
-		// In non-blocking mode the lock can legitimately fail while the frame is still encoding.
-		// Treat this as retryable and defer hard-failure accounting to blocking drain paths.
 		if (doNotWait)
 		{
 			return true;
 		}
 
-		// Some drivers can still report transient "not ready" style failures in blocking mode.
-		// Keep these retryable to avoid tearing down a healthy session due to transient jitter.
-		return lockRc == unchecked((int)0x887A000A) || // DXGI_ERROR_WAS_STILL_DRAWING
-			lockRc == unchecked((int)0x00000103); // WAIT_TIMEOUT
+		return lockRc == unchecked((int)0x887A000A) ||
+			lockRc == unchecked((int)0x00000103);
 	}
 
 	private bool EnsureRegisteredResource(TextureFrameRef frame, out IntPtr registeredResource)
@@ -1826,13 +1821,11 @@ public sealed class NvencHardwareEncoder : IHardwareEncoder
 			return false;
 		}
 
-		// H.264: IDR(5), SPS(7), PPS(8)
 		if (_selectedCodecGuid == NvencNative.NV_ENC_CODEC_H264_GUID)
 		{
 			return ContainsH264KeyNal(data);
 		}
 
-		// HEVC: IDR_W_RADL(19), IDR_N_LP(20), CRA(21), VPS/SPS/PPS(32/33/34)
 		if (_selectedCodecGuid == NvencNative.NV_ENC_CODEC_HEVC_GUID)
 		{
 			return ContainsHevcKeyNal(data);

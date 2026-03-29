@@ -2,8 +2,6 @@ using System.Runtime.InteropServices;
 
 internal static class NvencFunctionList
 {
-	// Oversized scratch buffer for upcoming function-list bootstrap work.
-	// We intentionally do not dereference function pointers from this buffer yet.
 	private const int FunctionListBufferBytes = 4096;
 
 	public static IntPtr Allocate(uint maxSupportedVersion, out uint encodedVersion)

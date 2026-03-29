@@ -93,7 +93,6 @@ public sealed class CaptureManager : IDisposable
 			}
 			catch (OperationCanceledException)
 			{
-				// shutdown path
 			}
 		}
 
@@ -143,7 +142,6 @@ public sealed class CaptureManager : IDisposable
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
-			// shutdown path
 		}
 	}
 
