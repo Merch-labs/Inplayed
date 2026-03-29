@@ -44,7 +44,8 @@ internal static class WindowsStartupRegistration
 		var executablePath = Environment.ProcessPath;
 		if (string.IsNullOrWhiteSpace(executablePath))
 		{
-			executablePath = Process.GetCurrentProcess().MainModule?.FileName;
+			var process = Process.GetCurrentProcess();
+			executablePath = process.MainModule?.FileName;
 		}
 
 		if (string.IsNullOrWhiteSpace(executablePath))
@@ -57,6 +58,7 @@ internal static class WindowsStartupRegistration
 
 	internal static string BuildRegistrationCommand(string executablePath)
 	{
-		return $"\"{executablePath}\" {AppLaunchOptions.BackgroundArgument}";
+		var command = $"\"{executablePath}\" {AppLaunchOptions.BackgroundArgument}";
+		return command;
 	}
 }

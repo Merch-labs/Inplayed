@@ -62,22 +62,31 @@ public sealed class GlobalHotkey : IDisposable
 
 	private void UnregisterHotkey()
 	{
-		if (_registered && _form.IsHandleCreated)
+		if (_registered)
 		{
-			UnregisterHotKey(_form.Handle, _id);
+			if (_form.IsHandleCreated)
+			{
+				UnregisterHotKey(_form.Handle, _id);
+			}
 		}
 
 		_registered = false;
-		_window?.Dispose();
+		if (_window != null)
+		{
+			_window.Dispose();
+		}
+
 		_window = null;
 	}
 
 	private void OnPressed(int id)
 	{
-		if (id == _id)
+		if (id != _id)
 		{
-			Pressed?.Invoke(this, EventArgs.Empty);
+			return;
 		}
+
+		Pressed?.Invoke(this, EventArgs.Empty);
 	}
 
 	public void Dispose()
@@ -91,10 +100,27 @@ public sealed class GlobalHotkey : IDisposable
 	private static uint ToNativeModifiers(ModifierKeys modifiers)
 	{
 		uint native = 0;
-		if ((modifiers & ModifierKeys.Alt) != 0) native |= 0x0001;
-		if ((modifiers & ModifierKeys.Control) != 0) native |= 0x0002;
-		if ((modifiers & ModifierKeys.Shift) != 0) native |= 0x0004;
-		if ((modifiers & ModifierKeys.Windows) != 0) native |= 0x0008;
+
+		if ((modifiers & ModifierKeys.Alt) != 0)
+		{
+			native |= 0x0001;
+		}
+
+		if ((modifiers & ModifierKeys.Control) != 0)
+		{
+			native |= 0x0002;
+		}
+
+		if ((modifiers & ModifierKeys.Shift) != 0)
+		{
+			native |= 0x0004;
+		}
+
+		if ((modifiers & ModifierKeys.Windows) != 0)
+		{
+			native |= 0x0008;
+		}
+
 		return native;
 	}
 
