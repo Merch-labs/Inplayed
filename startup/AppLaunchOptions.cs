@@ -9,7 +9,16 @@ internal sealed class AppLaunchOptions
 
 	public static AppLaunchOptions From(string[] args, AppConfig config)
 	{
-		var hiddenLaunchRequested = args.Any(arg => string.Equals(arg, BackgroundArgument, StringComparison.OrdinalIgnoreCase));
+		var hiddenLaunchRequested = false;
+		foreach (var arg in args)
+		{
+			if (string.Equals(arg, BackgroundArgument, StringComparison.OrdinalIgnoreCase))
+			{
+				hiddenLaunchRequested = true;
+				break;
+			}
+		}
+
 		if (!hiddenLaunchRequested)
 		{
 			return new AppLaunchOptions();

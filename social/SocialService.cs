@@ -14,11 +14,18 @@ internal sealed class SocialService
 
 	public IReadOnlyList<string> GetFriends()
 	{
-		return _state.Conversations
-			.Select(conversation => conversation.FriendName)
-			.Where(name => !string.IsNullOrWhiteSpace(name))
-			.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-			.ToList();
+		var friends = new List<string>();
+
+		foreach (var conversation in _state.Conversations)
+		{
+			if (!string.IsNullOrWhiteSpace(conversation.FriendName))
+			{
+				friends.Add(conversation.FriendName);
+			}
+		}
+
+		friends.Sort(StringComparer.OrdinalIgnoreCase);
+		return friends;
 	}
 
 	public IReadOnlyList<SocialMessage> GetMessages(string friendName)
@@ -29,9 +36,14 @@ internal sealed class SocialService
 			return [];
 		}
 
-		return conversation.Messages
-			.OrderBy(message => message.CreatedAtUtc)
-			.ToList();
+		var messages = new List<SocialMessage>();
+		foreach (var message in conversation.Messages)
+		{
+			messages.Add(message);
+		}
+
+		messages.Sort((left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
+		return messages;
 	}
 
 	public bool AddFriend(string rawName, out string normalizedName)
@@ -121,6 +133,7 @@ internal sealed class SocialService
 	private void NormalizeState()
 	{
 		var uniqueConversations = new Dictionary<string, SocialConversation>(StringComparer.OrdinalIgnoreCase);
+
 		foreach (var conversation in _state.Conversations)
 		{
 			var normalizedName = NormalizeName(conversation.FriendName);
@@ -138,22 +151,50 @@ internal sealed class SocialService
 				uniqueConversations.Add(normalizedName, target);
 			}
 
-			foreach (var message in conversation.Messages.OrderBy(message => message.CreatedAtUtc))
+			var orderedMessages = new List<SocialMessage>();
+			foreach (var message in conversation.Messages)
+			{
+				orderedMessages.Add(message);
+			}
+
+			orderedMessages.Sort((left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
+			foreach (var message in orderedMessages)
 			{
 				target.Messages.Add(NormalizeMessage(message));
 			}
 		}
 
 		_state.Conversations.Clear();
-		_state.Conversations.AddRange(uniqueConversations.Values.OrderBy(item => item.FriendName, StringComparer.OrdinalIgnoreCase));
+		var sortedConversations = new List<SocialConversation>();
+		foreach (var conversation in uniqueConversations.Values)
+		{
+			sortedConversations.Add(conversation);
+		}
+
+		sortedConversations.Sort((left, right) =>
+			StringComparer.OrdinalIgnoreCase.Compare(left.FriendName, right.FriendName));
+
+		foreach (var conversation in sortedConversations)
+		{
+			_state.Conversations.Add(conversation);
+		}
+
 		Persist();
 	}
 
 	private SocialConversation? FindConversation(string rawName)
 	{
 		var normalizedName = NormalizeName(rawName);
-		return _state.Conversations.FirstOrDefault(conversation =>
-			string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase));
+
+		foreach (var conversation in _state.Conversations)
+		{
+			if (string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase))
+			{
+				return conversation;
+			}
+		}
+
+		return null;
 	}
 
 	private SocialConversation? FindOrCreateConversation(string rawName)
@@ -185,6 +226,12 @@ internal sealed class SocialService
 			return new SocialMessage();
 		}
 
+		var clipFileName = message.ClipFileName ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(clipFileName) && !string.IsNullOrWhiteSpace(message.ClipPath))
+		{
+			clipFileName = System.IO.Path.GetFileName(message.ClipPath);
+		}
+
 		return new SocialMessage
 		{
 			Id = string.IsNullOrWhiteSpace(message.Id) ? Guid.NewGuid().ToString("N") : message.Id,
@@ -192,9 +239,7 @@ internal sealed class SocialService
 			Kind = string.IsNullOrWhiteSpace(message.Kind) ? SocialMessageKinds.Text : message.Kind,
 			Body = message.Body?.Trim() ?? string.Empty,
 			ClipPath = message.ClipPath ?? string.Empty,
-			ClipFileName = string.IsNullOrWhiteSpace(message.ClipFileName) && !string.IsNullOrWhiteSpace(message.ClipPath)
-				? System.IO.Path.GetFileName(message.ClipPath)
-				: message.ClipFileName ?? string.Empty,
+			ClipFileName = clipFileName,
 			CreatedAtUtc = message.CreatedAtUtc == default ? DateTime.UtcNow : message.CreatedAtUtc
 		};
 	}

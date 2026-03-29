@@ -490,8 +490,14 @@ internal static class AppConfigStorage
 			dir = dir.Parent;
 		}
 
-		foreach (var path in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+		var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var path in candidates)
 		{
+			if (!checkedPaths.Add(path))
+			{
+				continue;
+			}
+
 			if (File.Exists(path))
 			{
 				return path;

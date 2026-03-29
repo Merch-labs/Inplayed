@@ -9,10 +9,25 @@ internal sealed class AppConfig
 	public RecordingConfig Recording { get; init; } = new();
 	public StartupConfig Startup { get; init; } = new();
 
-	public static AppConfig Load() => AppConfigStorage.Load();
-	public static AppConfig CreateDefault() => AppConfigStorage.CreateDefault();
-	public static void Save(AppConfig config) => AppConfigStorage.Save(config);
-	public static string GetConfigPath() => AppConfigStorage.GetConfigPath();
+	public static AppConfig Load()
+	{
+		return AppConfigStorage.Load();
+	}
+
+	public static AppConfig CreateDefault()
+	{
+		return AppConfigStorage.CreateDefault();
+	}
+
+	public static void Save(AppConfig config)
+	{
+		AppConfigStorage.Save(config);
+	}
+
+	public static string GetConfigPath()
+	{
+		return AppConfigStorage.GetConfigPath();
+	}
 
 	public (ModifierKeys Modifiers, Key Key) GetSaveClipHotkey()
 	{

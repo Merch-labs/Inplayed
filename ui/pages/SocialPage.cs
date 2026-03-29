@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Windows.Forms;
 
 namespace inplayed;
@@ -69,7 +68,13 @@ public sealed class SocialPage : UserControl
 		_sendButton = (Button)rightPanel.Controls.Find("sendButton", true)[0];
 		_statusLabel = (Label)rightPanel.Controls.Find("statusLabel", true)[0];
 
-		_friendsSource.DataSource = _socialService.GetFriends().ToList();
+		var friends = new List<string>();
+		foreach (var friend in _socialService.GetFriends())
+		{
+			friends.Add(friend);
+		}
+
+		_friendsSource.DataSource = friends;
 		_friendsList.DataSource = _friendsSource;
 		_friendsList.SelectedIndexChanged += (_, _) => RefreshConversation();
 		_friendsList.DoubleClick += (_, _) => OpenSelectedFriendConversation();
@@ -300,7 +305,12 @@ public sealed class SocialPage : UserControl
 
 	private void RefreshFriends(string? selectedFriend = null)
 	{
-		var friends = _socialService.GetFriends().ToList();
+		var friends = new List<string>();
+		foreach (var friend in _socialService.GetFriends())
+		{
+			friends.Add(friend);
+		}
+
 		_friendsSource.DataSource = friends;
 
 		if (friends.Count == 0)
@@ -312,12 +322,33 @@ public sealed class SocialPage : UserControl
 		}
 
 		var friendToSelect = selectedFriend;
-		if (string.IsNullOrWhiteSpace(friendToSelect) || !friends.Any(friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase)))
+		var selectedFriendExists = false;
+		if (!string.IsNullOrWhiteSpace(friendToSelect))
+		{
+			foreach (var friend in friends)
+			{
+				if (string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase))
+				{
+					selectedFriendExists = true;
+					break;
+				}
+			}
+		}
+
+		if (string.IsNullOrWhiteSpace(friendToSelect) || !selectedFriendExists)
 		{
 			friendToSelect = friends[0];
 		}
 
-		_friendsList.SelectedItem = friends.First(friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase));
+		foreach (var friend in friends)
+		{
+			if (string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase))
+			{
+				_friendsList.SelectedItem = friend;
+				break;
+			}
+		}
+
 		RefreshConversation();
 	}
 
