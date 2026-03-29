@@ -146,14 +146,23 @@ public sealed class MainForm : Form
 	{
 		if (!_pages.TryGetValue(key, out var page))
 		{
-			page = key switch
+			switch (key)
 			{
-				"recording" => new RecordingPage(_captureController),
-				"library" => new LibraryPage(),
-				"social" => new SocialPage(),
-				"settings" => new SettingsPage(ApplySettings),
-				_ => throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.")
-			};
+				case "recording":
+					page = new RecordingPage(_captureController);
+					break;
+				case "library":
+					page = new LibraryPage();
+					break;
+				case "social":
+					page = new SocialPage();
+					break;
+				case "settings":
+					page = new SettingsPage(ApplySettings);
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(key), key, "Unknown page key.");
+			}
 
 			page.Dock = DockStyle.Fill;
 			_pages[key] = page;
@@ -182,16 +191,18 @@ public sealed class MainForm : Form
 
 	private Image LoadIcon(string name)
 	{
-		string basePath = Path.Combine(AppContext.BaseDirectory, "ui", "icons");
-		string requestedPath = Path.Combine(basePath, $"{name}.png");
-		string defaultPath = Path.Combine(basePath, "place-holder.png");
+		var basePath = Path.Combine(AppContext.BaseDirectory, "ui", "icons");
+		var requestedPath = Path.Combine(basePath, $"{name}.png");
+		var defaultPath = Path.Combine(basePath, "place-holder.png");
+		var path = defaultPath;
 
-		string path = File.Exists(requestedPath) ? requestedPath : defaultPath;
-
-		using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
+		if (File.Exists(requestedPath))
 		{
-			return Image.FromStream(fs);
+			path = requestedPath;
 		}
+
+		using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+		return Image.FromStream(fs);
 	}
 
 	private void UpdateSidebarSelection(string selectedPage)
@@ -236,9 +247,13 @@ public sealed class MainForm : Form
 	private void UpdateTrayTooltip()
 	{
 		var sessionStatus = _captureController.GetSessionStatus();
-		_trayIcon.Text = sessionStatus.Length > 50
-			? $"inplayed - {sessionStatus[..47]}..."
-			: $"inplayed - {sessionStatus}";
+		if (sessionStatus.Length > 50)
+		{
+			_trayIcon.Text = $"inplayed - {sessionStatus[..47]}...";
+			return;
+		}
+
+		_trayIcon.Text = $"inplayed - {sessionStatus}";
 	}
 
 	private void ShowFromTray()
@@ -322,7 +337,12 @@ public sealed class MainForm : Form
 	private bool ShouldCloseToTray()
 	{
 		var config = AppConfig.Load();
-		return _launchOptions.StartHidden || config.Startup.LaunchOnWindowsStartup;
+		if (_launchOptions.StartHidden)
+		{
+			return true;
+		}
+
+		return config.Startup.LaunchOnWindowsStartup;
 	}
 
 	private void ExitApplication()

@@ -443,7 +443,8 @@ public sealed class SettingsPage : UserControl
 
 	private void SaveSettings()
 	{
-		if (_hotkeyComboBox.SelectedItem is not string key || string.IsNullOrWhiteSpace(key))
+		var key = _hotkeyComboBox.SelectedItem as string;
+		if (string.IsNullOrWhiteSpace(key))
 		{
 			_statusLabel.Text = "Status: choose a hotkey key";
 			return;
@@ -557,15 +558,34 @@ public sealed class SettingsPage : UserControl
 
 	private void ApplyModifiers(string modifiers)
 	{
-		var values = modifiers
-			.Split(new[] { '+', '|', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-			.Select(v => v.Trim())
-			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		_ctrlModifierCheckBox.Checked = false;
+		_altModifierCheckBox.Checked = false;
+		_shiftModifierCheckBox.Checked = false;
+		_winModifierCheckBox.Checked = false;
 
-		_ctrlModifierCheckBox.Checked = values.Contains("Control") || values.Contains("Ctrl");
-		_altModifierCheckBox.Checked = values.Contains("Alt");
-		_shiftModifierCheckBox.Checked = values.Contains("Shift");
-		_winModifierCheckBox.Checked = values.Contains("Windows") || values.Contains("Win");
+		var parts = modifiers.Split(new[] { '+', '|', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+		foreach (var part in parts)
+		{
+			var value = part.Trim();
+			if (string.Equals(value, "Control", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(value, "Ctrl", StringComparison.OrdinalIgnoreCase))
+			{
+				_ctrlModifierCheckBox.Checked = true;
+			}
+			else if (string.Equals(value, "Alt", StringComparison.OrdinalIgnoreCase))
+			{
+				_altModifierCheckBox.Checked = true;
+			}
+			else if (string.Equals(value, "Shift", StringComparison.OrdinalIgnoreCase))
+			{
+				_shiftModifierCheckBox.Checked = true;
+			}
+			else if (string.Equals(value, "Windows", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(value, "Win", StringComparison.OrdinalIgnoreCase))
+			{
+				_winModifierCheckBox.Checked = true;
+			}
+		}
 	}
 
 	private void SelectHotkeyKey(string key)
@@ -591,9 +611,13 @@ public sealed class SettingsPage : UserControl
 
 	private string GetSelectedCaptureTargetMode()
 	{
-		return _captureTargetModeComboBox.SelectedItem is CaptureTargetOption option
-			? option.Mode
-			: CaptureTargetModes.PrimaryMonitor;
+		var option = _captureTargetModeComboBox.SelectedItem as CaptureTargetOption;
+		if (option == null)
+		{
+			return CaptureTargetModes.PrimaryMonitor;
+		}
+
+		return option.Mode;
 	}
 
 	private void UpdateCaptureTargetInputs()
@@ -609,20 +633,46 @@ public sealed class SettingsPage : UserControl
 	private string BuildModifiers()
 	{
 		var parts = new List<string>();
-		if (_ctrlModifierCheckBox.Checked) parts.Add("Control");
-		if (_altModifierCheckBox.Checked) parts.Add("Alt");
-		if (_shiftModifierCheckBox.Checked) parts.Add("Shift");
-		if (_winModifierCheckBox.Checked) parts.Add("Windows");
+		if (_ctrlModifierCheckBox.Checked)
+		{
+			parts.Add("Control");
+		}
 
-		return parts.Count > 0 ? string.Join("+", parts) : "Alt";
+		if (_altModifierCheckBox.Checked)
+		{
+			parts.Add("Alt");
+		}
+
+		if (_shiftModifierCheckBox.Checked)
+		{
+			parts.Add("Shift");
+		}
+
+		if (_winModifierCheckBox.Checked)
+		{
+			parts.Add("Windows");
+		}
+
+		if (parts.Count == 0)
+		{
+			return "Alt";
+		}
+
+		return string.Join("+", parts);
 	}
 
 	private void UpdateStartupInputs()
 	{
 		var launchOnWindowsStartup = _launchOnWindowsStartupCheckBox.Checked;
 		_startHiddenOnWindowsStartupCheckBox.Enabled = launchOnWindowsStartup;
-		_autoStartCaptureWhenHiddenLaunchCheckBox.Enabled =
-			launchOnWindowsStartup && _startHiddenOnWindowsStartupCheckBox.Checked;
+
+		var enableAutoStartCapture = false;
+		if (launchOnWindowsStartup && _startHiddenOnWindowsStartupCheckBox.Checked)
+		{
+			enableAutoStartCapture = true;
+		}
+
+		_autoStartCaptureWhenHiddenLaunchCheckBox.Enabled = enableAutoStartCapture;
 	}
 
 	private void UpdateYamnetInputs()
@@ -656,13 +706,12 @@ public sealed class SettingsPage : UserControl
 
 	private static object[] GetCaptureTargetOptions()
 	{
-		return new object[]
-		{
-			new CaptureTargetOption("Primary Monitor", CaptureTargetModes.PrimaryMonitor),
-			new CaptureTargetOption("Specific Monitor Index", CaptureTargetModes.SpecificMonitor),
-			new CaptureTargetOption("Active Window At Start", CaptureTargetModes.ActiveWindow),
-			new CaptureTargetOption("Executable Path", CaptureTargetModes.ExecutablePath)
-		};
+		var options = new List<object>();
+		options.Add(new CaptureTargetOption("Primary Monitor", CaptureTargetModes.PrimaryMonitor));
+		options.Add(new CaptureTargetOption("Specific Monitor Index", CaptureTargetModes.SpecificMonitor));
+		options.Add(new CaptureTargetOption("Active Window At Start", CaptureTargetModes.ActiveWindow));
+		options.Add(new CaptureTargetOption("Executable Path", CaptureTargetModes.ExecutablePath));
+		return options.ToArray();
 	}
 
 	private sealed class CaptureTargetOption
