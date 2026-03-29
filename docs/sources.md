@@ -83,6 +83,8 @@ Used for:
 - `server/Models/*`
 
 Sources:
+- AQA guidance on areas of concern: https://www.aqa.org.uk/resources/computer-science-and-it/as-and-a-level/computer-science-7516-7517/teach/guidance-on-areas-of-concern
+- AQA relational databases and SQL content: https://www.aqa.org.uk/subjects/computer-science/gcse/computer-science-8525/specification/subject-content/relational-databases-and-structured-query-language-sql
 - ASP.NET Core minimal APIs: https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api
 - Npgsql basic usage: https://www.npgsql.org/doc/basic-usage.html
 - PostgreSQL tutorial: https://www.postgresql.org/docs/current/tutorial.html

@@ -54,14 +54,13 @@ app.MapPost("/users", async (SocialDatabase database, CreateUserRequest request)
 	};
 
 	await using (var insertCommand = new NpgsqlCommand(
-		"INSERT INTO users (id, username, display_name, created_at_utc) VALUES (@id, @username, @displayName, @createdAtUtc)",
+		"INSERT INTO users (username, display_name, created_at_utc) VALUES (@username, @displayName, @createdAtUtc) RETURNING id",
 		connection))
 	{
-		insertCommand.Parameters.AddWithValue("id", user.Id);
 		insertCommand.Parameters.AddWithValue("username", user.Username);
 		insertCommand.Parameters.AddWithValue("displayName", user.DisplayName);
 		insertCommand.Parameters.AddWithValue("createdAtUtc", user.CreatedAtUtc);
-		await insertCommand.ExecuteNonQueryAsync();
+		user.Id = Convert.ToInt32(await insertCommand.ExecuteScalarAsync());
 	}
 
 	return Results.Created($"/users/{user.Id}", user);
@@ -82,7 +81,7 @@ app.MapGet("/users", async (SocialDatabase database) =>
 	{
 		users.Add(new SocialUser
 		{
-			Id = reader.GetGuid(0),
+			Id = reader.GetInt32(0),
 			Username = reader.GetString(1),
 			DisplayName = reader.GetString(2),
 			CreatedAtUtc = reader.GetDateTime(3)
@@ -92,7 +91,7 @@ app.MapGet("/users", async (SocialDatabase database) =>
 	return Results.Ok(users);
 });
 
-app.MapGet("/users/{userId:guid}", async (SocialDatabase database, Guid userId) =>
+app.MapGet("/users/{userId:int}", async (SocialDatabase database, int userId) =>
 {
 	await using var connection = database.CreateConnection();
 	await connection.OpenAsync();
@@ -109,7 +108,7 @@ app.MapGet("/users/{userId:guid}", async (SocialDatabase database, Guid userId) 
 
 	var user = new SocialUser
 	{
-		Id = reader.GetGuid(0),
+		Id = reader.GetInt32(0),
 		Username = reader.GetString(1),
 		DisplayName = reader.GetString(2),
 		CreatedAtUtc = reader.GetDateTime(3)
@@ -156,23 +155,23 @@ app.MapPost("/friend-requests", async (SocialDatabase database, CreateFriendRequ
 
 	await using (var insertCommand = new NpgsqlCommand(
 		@"INSERT INTO friend_requests
-		  (id, requester_id, recipient_id, status, created_at_utc, responded_at_utc)
-		  VALUES (@id, @requesterId, @recipientId, @status, @createdAtUtc, @respondedAtUtc)",
+		  (requester_id, recipient_id, status, created_at_utc, responded_at_utc)
+		  VALUES (@requesterId, @recipientId, @status, @createdAtUtc, @respondedAtUtc)
+		  RETURNING id",
 		connection))
 	{
-		insertCommand.Parameters.AddWithValue("id", friendRequest.Id);
 		insertCommand.Parameters.AddWithValue("requesterId", friendRequest.RequesterId);
 		insertCommand.Parameters.AddWithValue("recipientId", friendRequest.RecipientId);
 		insertCommand.Parameters.AddWithValue("status", friendRequest.Status.ToString());
 		insertCommand.Parameters.AddWithValue("createdAtUtc", friendRequest.CreatedAtUtc);
 		insertCommand.Parameters.AddWithValue("respondedAtUtc", DBNull.Value);
-		await insertCommand.ExecuteNonQueryAsync();
+		friendRequest.Id = Convert.ToInt32(await insertCommand.ExecuteScalarAsync());
 	}
 
 	return Results.Created($"/friend-requests/{friendRequest.Id}", friendRequest);
 });
 
-app.MapPost("/friend-requests/{requestId:guid}/accept", async (SocialDatabase database, Guid requestId) =>
+app.MapPost("/friend-requests/{requestId:int}/accept", async (SocialDatabase database, int requestId) =>
 {
 	await using var connection = database.CreateConnection();
 	await connection.OpenAsync();
@@ -204,7 +203,7 @@ app.MapPost("/friend-requests/{requestId:guid}/accept", async (SocialDatabase da
 	return Results.Ok(friendRequest);
 });
 
-app.MapGet("/users/{userId:guid}/friends", async (SocialDatabase database, Guid userId) =>
+app.MapGet("/users/{userId:int}/friends", async (SocialDatabase database, int userId) =>
 {
 	var friends = new List<SocialUser>();
 
@@ -230,7 +229,7 @@ app.MapGet("/users/{userId:guid}/friends", async (SocialDatabase database, Guid 
 	{
 		friends.Add(new SocialUser
 		{
-			Id = reader.GetGuid(0),
+			Id = reader.GetInt32(0),
 			Username = reader.GetString(1),
 			DisplayName = reader.GetString(2),
 			CreatedAtUtc = reader.GetDateTime(3)
@@ -256,7 +255,7 @@ app.MapPost("/conversations/direct", async (SocialDatabase database, CreateDirec
 	}
 
 	var existingConversationId = await FindDirectConversationIdAsync(connection, request.FirstUserId, request.SecondUserId);
-	if (existingConversationId != Guid.Empty)
+	if (existingConversationId != 0)
 	{
 		return Results.Ok(new { id = existingConversationId, kind = "Direct" });
 	}
@@ -264,13 +263,12 @@ app.MapPost("/conversations/direct", async (SocialDatabase database, CreateDirec
 	var conversation = new Conversation();
 
 	await using (var insertConversation = new NpgsqlCommand(
-		"INSERT INTO conversations (id, kind, created_at_utc) VALUES (@id, @kind, @createdAtUtc)",
+		"INSERT INTO conversations (kind, created_at_utc) VALUES (@kind, @createdAtUtc) RETURNING id",
 		connection))
 	{
-		insertConversation.Parameters.AddWithValue("id", conversation.Id);
 		insertConversation.Parameters.AddWithValue("kind", conversation.Kind.ToString());
 		insertConversation.Parameters.AddWithValue("createdAtUtc", conversation.CreatedAtUtc);
-		await insertConversation.ExecuteNonQueryAsync();
+		conversation.Id = Convert.ToInt32(await insertConversation.ExecuteScalarAsync());
 	}
 
 	foreach (var userId in new[] { request.FirstUserId, request.SecondUserId })
@@ -287,7 +285,7 @@ app.MapPost("/conversations/direct", async (SocialDatabase database, CreateDirec
 	return Results.Created($"/conversations/{conversation.Id}", conversation);
 });
 
-app.MapGet("/users/{userId:guid}/conversations", async (SocialDatabase database, Guid userId) =>
+app.MapGet("/users/{userId:int}/conversations", async (SocialDatabase database, int userId) =>
 {
 	var conversations = new List<Conversation>();
 
@@ -307,7 +305,7 @@ app.MapGet("/users/{userId:guid}/conversations", async (SocialDatabase database,
 	{
 		conversations.Add(new Conversation
 		{
-			Id = reader.GetGuid(0),
+			Id = reader.GetInt32(0),
 			Kind = Enum.TryParse<ConversationKind>(reader.GetString(1), out var kind) ? kind : ConversationKind.Direct,
 			CreatedAtUtc = reader.GetDateTime(2)
 		});
@@ -316,7 +314,7 @@ app.MapGet("/users/{userId:guid}/conversations", async (SocialDatabase database,
 	return Results.Ok(conversations);
 });
 
-app.MapGet("/conversations/{conversationId:guid}/messages", async (SocialDatabase database, Guid conversationId) =>
+app.MapGet("/conversations/{conversationId:int}/messages", async (SocialDatabase database, int conversationId) =>
 {
 	var messages = new List<SocialMessageRecord>();
 
@@ -335,9 +333,9 @@ app.MapGet("/conversations/{conversationId:guid}/messages", async (SocialDatabas
 	{
 		messages.Add(new SocialMessageRecord
 		{
-			Id = reader.GetGuid(0),
-			ConversationId = reader.GetGuid(1),
-			SenderId = reader.GetGuid(2),
+			Id = reader.GetInt32(0),
+			ConversationId = reader.GetInt32(1),
+			SenderId = reader.GetInt32(2),
 			Body = reader.GetString(3),
 			MediaUrl = reader.GetString(4),
 			MediaType = reader.GetString(5),
@@ -382,17 +380,17 @@ app.MapPost("/messages", async (SocialDatabase database, CreateMessageRequest re
 
 	await using var command = new NpgsqlCommand(
 		@"INSERT INTO messages
-		  (id, conversation_id, sender_id, body, media_url, media_type, created_at_utc)
-		  VALUES (@id, @conversationId, @senderId, @body, @mediaUrl, @mediaType, @createdAtUtc)",
+		  (conversation_id, sender_id, body, media_url, media_type, created_at_utc)
+		  VALUES (@conversationId, @senderId, @body, @mediaUrl, @mediaType, @createdAtUtc)
+		  RETURNING id",
 		connection);
-	command.Parameters.AddWithValue("id", message.Id);
 	command.Parameters.AddWithValue("conversationId", message.ConversationId);
 	command.Parameters.AddWithValue("senderId", message.SenderId);
 	command.Parameters.AddWithValue("body", message.Body);
 	command.Parameters.AddWithValue("mediaUrl", message.MediaUrl);
 	command.Parameters.AddWithValue("mediaType", message.MediaType);
 	command.Parameters.AddWithValue("createdAtUtc", message.CreatedAtUtc);
-	await command.ExecuteNonQueryAsync();
+	message.Id = Convert.ToInt32(await command.ExecuteScalarAsync());
 
 	return Results.Created($"/conversations/{message.ConversationId}/messages/{message.Id}", message);
 });
@@ -421,19 +419,18 @@ app.MapPost("/posts", async (SocialDatabase database, CreatePostRequest request)
 	};
 
 	await using var command = new NpgsqlCommand(
-		"INSERT INTO posts (id, author_id, caption, media_url, created_at_utc) VALUES (@id, @authorId, @caption, @mediaUrl, @createdAtUtc)",
+		"INSERT INTO posts (author_id, caption, media_url, created_at_utc) VALUES (@authorId, @caption, @mediaUrl, @createdAtUtc) RETURNING id",
 		connection);
-	command.Parameters.AddWithValue("id", post.Id);
 	command.Parameters.AddWithValue("authorId", post.AuthorId);
 	command.Parameters.AddWithValue("caption", post.Caption);
 	command.Parameters.AddWithValue("mediaUrl", post.MediaUrl);
 	command.Parameters.AddWithValue("createdAtUtc", post.CreatedAtUtc);
-	await command.ExecuteNonQueryAsync();
+	post.Id = Convert.ToInt32(await command.ExecuteScalarAsync());
 
 	return Results.Created($"/posts/{post.Id}", post);
 });
 
-app.MapGet("/users/{userId:guid}/feed", async (SocialDatabase database, Guid userId) =>
+app.MapGet("/users/{userId:int}/feed", async (SocialDatabase database, int userId) =>
 {
 	var posts = new List<SocialPost>();
 
@@ -462,8 +459,8 @@ app.MapGet("/users/{userId:guid}/feed", async (SocialDatabase database, Guid use
 	{
 		posts.Add(new SocialPost
 		{
-			Id = reader.GetGuid(0),
-			AuthorId = reader.GetGuid(1),
+			Id = reader.GetInt32(0),
+			AuthorId = reader.GetInt32(1),
 			Caption = reader.GetString(2),
 			MediaUrl = reader.GetString(3),
 			CreatedAtUtc = reader.GetDateTime(4)
@@ -475,7 +472,7 @@ app.MapGet("/users/{userId:guid}/feed", async (SocialDatabase database, Guid use
 
 app.Run();
 
-static async Task<bool> UserExistsAsync(NpgsqlConnection connection, Guid userId)
+static async Task<bool> UserExistsAsync(NpgsqlConnection connection, int userId)
 {
 	await using var command = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE id = @id", connection);
 	command.Parameters.AddWithValue("id", userId);
@@ -483,7 +480,7 @@ static async Task<bool> UserExistsAsync(NpgsqlConnection connection, Guid userId
 	return count > 0;
 }
 
-static async Task<bool> ConversationExistsAsync(NpgsqlConnection connection, Guid conversationId)
+static async Task<bool> ConversationExistsAsync(NpgsqlConnection connection, int conversationId)
 {
 	await using var command = new NpgsqlCommand("SELECT COUNT(*) FROM conversations WHERE id = @id", connection);
 	command.Parameters.AddWithValue("id", conversationId);
@@ -491,7 +488,7 @@ static async Task<bool> ConversationExistsAsync(NpgsqlConnection connection, Gui
 	return count > 0;
 }
 
-static async Task<bool> ConversationHasUserAsync(NpgsqlConnection connection, Guid conversationId, Guid userId)
+static async Task<bool> ConversationHasUserAsync(NpgsqlConnection connection, int conversationId, int userId)
 {
 	await using var command = new NpgsqlCommand(
 		"SELECT COUNT(*) FROM conversation_members WHERE conversation_id = @conversationId AND user_id = @userId",
@@ -502,7 +499,7 @@ static async Task<bool> ConversationHasUserAsync(NpgsqlConnection connection, Gu
 	return count > 0;
 }
 
-static async Task<Guid> FindDirectConversationIdAsync(NpgsqlConnection connection, Guid firstUserId, Guid secondUserId)
+static async Task<int> FindDirectConversationIdAsync(NpgsqlConnection connection, int firstUserId, int secondUserId)
 {
 	await using var command = new NpgsqlCommand(
 		@"SELECT c.id
@@ -519,13 +516,13 @@ static async Task<Guid> FindDirectConversationIdAsync(NpgsqlConnection connectio
 	var result = await command.ExecuteScalarAsync();
 	if (result == null || result == DBNull.Value)
 	{
-		return Guid.Empty;
+		return 0;
 	}
 
-	return (Guid)result;
+	return Convert.ToInt32(result);
 }
 
-static async Task<FriendRequest?> GetFriendRequestAsync(NpgsqlConnection connection, Guid requestId)
+static async Task<FriendRequest?> GetFriendRequestAsync(NpgsqlConnection connection, int requestId)
 {
 	await using var command = new NpgsqlCommand(
 		@"SELECT id, requester_id, recipient_id, status, created_at_utc, responded_at_utc
@@ -542,9 +539,9 @@ static async Task<FriendRequest?> GetFriendRequestAsync(NpgsqlConnection connect
 
 	return new FriendRequest
 	{
-		Id = reader.GetGuid(0),
-		RequesterId = reader.GetGuid(1),
-		RecipientId = reader.GetGuid(2),
+		Id = reader.GetInt32(0),
+		RequesterId = reader.GetInt32(1),
+		RecipientId = reader.GetInt32(2),
 		Status = Enum.TryParse<FriendRequestStatus>(reader.GetString(3), out var status) ? status : FriendRequestStatus.Pending,
 		CreatedAtUtc = reader.GetDateTime(4),
 		RespondedAtUtc = reader.IsDBNull(5) ? null : reader.GetDateTime(5)
@@ -552,7 +549,7 @@ static async Task<FriendRequest?> GetFriendRequestAsync(NpgsqlConnection connect
 }
 
 internal sealed record CreateUserRequest(string Username, string? DisplayName);
-internal sealed record CreateFriendRequestRequest(Guid RequesterId, Guid RecipientId);
-internal sealed record CreateDirectConversationRequest(Guid FirstUserId, Guid SecondUserId);
-internal sealed record CreateMessageRequest(Guid ConversationId, Guid SenderId, string? Body, string? MediaUrl, string? MediaType);
-internal sealed record CreatePostRequest(Guid AuthorId, string? Caption, string MediaUrl);
+internal sealed record CreateFriendRequestRequest(int RequesterId, int RecipientId);
+internal sealed record CreateDirectConversationRequest(int FirstUserId, int SecondUserId);
+internal sealed record CreateMessageRequest(int ConversationId, int SenderId, string? Body, string? MediaUrl, string? MediaType);
+internal sealed record CreatePostRequest(int AuthorId, string? Caption, string MediaUrl);

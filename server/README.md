@@ -18,6 +18,11 @@ The server uses PostgreSQL.
 The table setup is in:
 - `sql/schema.sql`
 
+The schema uses:
+- integer IDs
+- `VARCHAR(...)` for text fields with clear size limits
+- `TIMESTAMP` for date and time values
+
 Default connection string location:
 - `appsettings.json`
 - or `ConnectionStrings__SocialDatabase` environment variable
