@@ -35,14 +35,24 @@ public sealed class SettingsPage : UserControl
 		_onSettingsSaved = onSettingsSaved;
 		BackColor = UiTheme.ShellBackground;
 
-		var root = new TableLayoutPanel
+		var scrollHost = new Panel
 		{
 			Dock = DockStyle.Fill,
+			AutoScroll = true,
+			BackColor = UiTheme.ShellBackground
+		};
+
+		var root = new TableLayoutPanel
+		{
+			Dock = DockStyle.Top,
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
 			RowCount = 9,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
+		root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -51,7 +61,7 @@ public sealed class SettingsPage : UserControl
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
 		_nativeNvencCheckBox = new CheckBox
 		{
@@ -397,7 +407,8 @@ public sealed class SettingsPage : UserControl
 		root.Controls.Add(actions, 0, 7);
 		root.Controls.Add(_statusLabel, 0, 8);
 
-		Controls.Add(root);
+		scrollHost.Controls.Add(root);
+		Controls.Add(scrollHost);
 		UiTheme.ApplyPalette(this);
 		LoadSettings();
 	}
