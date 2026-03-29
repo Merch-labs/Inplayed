@@ -65,6 +65,7 @@ internal sealed class AppConfig
 		public bool IncludeMicAudio { get; init; } = true;
 		public bool IncludeSystemAudio { get; init; } = true;
 		public CaptureTargetConfig CaptureTarget { get; init; } = new();
+		public YamnetDetectionConfig YamnetDetection { get; init; } = new();
 	}
 
 	internal sealed class CaptureTargetConfig
@@ -79,5 +80,13 @@ internal sealed class AppConfig
 		public bool LaunchOnWindowsStartup { get; init; }
 		public bool StartHiddenOnWindowsStartup { get; init; } = true;
 		public bool AutoStartCaptureWhenHiddenLaunch { get; init; } = true;
+	}
+
+	internal sealed class YamnetDetectionConfig
+	{
+		public bool Enabled { get; init; }
+		public string ModelPath { get; init; } = string.Empty;
+		public int SensitivityPercent { get; init; } = 65;
+		public int CooldownSeconds { get; init; } = 15;
 	}
 }

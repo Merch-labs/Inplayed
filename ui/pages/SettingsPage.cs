@@ -11,6 +11,10 @@ public sealed class SettingsPage : UserControl
 	private readonly NumericUpDown _clipSecondsInput;
 	private readonly CheckBox _includeMicAudioCheckBox;
 	private readonly CheckBox _includeSystemAudioCheckBox;
+	private readonly CheckBox _enableYamnetDetectionCheckBox;
+	private readonly TextBox _yamnetModelPathTextBox;
+	private readonly NumericUpDown _yamnetSensitivityInput;
+	private readonly NumericUpDown _yamnetCooldownInput;
 	private readonly ComboBox _captureTargetModeComboBox;
 	private readonly NumericUpDown _monitorIndexInput;
 	private readonly TextBox _executablePathTextBox;
@@ -34,11 +38,12 @@ public sealed class SettingsPage : UserControl
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 8,
+			RowCount = 9,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
+		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -119,6 +124,89 @@ public sealed class SettingsPage : UserControl
 		recordingLayout.Controls.Add(_includeSystemAudioCheckBox, 0, 4);
 		recordingLayout.SetColumnSpan(_includeSystemAudioCheckBox, 2);
 		recordingGroup.Controls.Add(recordingLayout);
+
+		var yamnetGroup = new GroupBox
+		{
+			AutoSize = true,
+			Dock = DockStyle.Top,
+			Text = "YAMNet Clipping",
+			Padding = new Padding(10)
+		};
+
+		var yamnetLayout = new TableLayoutPanel
+		{
+			AutoSize = true,
+			ColumnCount = 3,
+			RowCount = 5,
+			Dock = DockStyle.Fill
+		};
+		yamnetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		yamnetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		yamnetLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+		_enableYamnetDetectionCheckBox = new CheckBox
+		{
+			AutoSize = true,
+			Text = "Enable YAMNet-based clipping"
+		};
+		_enableYamnetDetectionCheckBox.CheckedChanged += (_, _) => UpdateYamnetInputs();
+
+		_yamnetModelPathTextBox = new TextBox
+		{
+			Width = 340
+		};
+
+		var browseYamnetModelButton = new Button
+		{
+			AutoSize = true,
+			Text = "Browse Model..."
+		};
+		UiTheme.StyleSecondaryButton(browseYamnetModelButton);
+		browseYamnetModelButton.Click += (_, _) => BrowseYamnetModelPath();
+
+		var testYamnetModelButton = new Button
+		{
+			AutoSize = true,
+			Text = "Test Model"
+		};
+		UiTheme.StyleSecondaryButton(testYamnetModelButton);
+		testYamnetModelButton.Click += (_, _) => ValidateYamnetModel();
+
+		_yamnetSensitivityInput = new NumericUpDown
+		{
+			Minimum = 1,
+			Maximum = 100,
+			Value = 65,
+			Width = 90
+		};
+
+		_yamnetCooldownInput = new NumericUpDown
+		{
+			Minimum = 5,
+			Maximum = 120,
+			Value = 15,
+			Width = 90
+		};
+
+		var yamnetHintLabel = new Label
+		{
+			AutoSize = true,
+			Text = "Uses an ONNX-exported YAMNet model. This pass wires config and model validation first."
+		};
+
+		yamnetLayout.Controls.Add(_enableYamnetDetectionCheckBox, 0, 0);
+		yamnetLayout.SetColumnSpan(_enableYamnetDetectionCheckBox, 3);
+		yamnetLayout.Controls.Add(new Label { AutoSize = true, Text = "Model Path", Margin = new Padding(0, 7, 8, 0) }, 0, 1);
+		yamnetLayout.Controls.Add(_yamnetModelPathTextBox, 1, 1);
+		yamnetLayout.Controls.Add(browseYamnetModelButton, 2, 1);
+		yamnetLayout.Controls.Add(testYamnetModelButton, 2, 2);
+		yamnetLayout.Controls.Add(new Label { AutoSize = true, Text = "Sensitivity", Margin = new Padding(0, 7, 8, 0) }, 0, 3);
+		yamnetLayout.Controls.Add(_yamnetSensitivityInput, 1, 3);
+		yamnetLayout.Controls.Add(new Label { AutoSize = true, Text = "Cooldown (sec)", Margin = new Padding(0, 7, 8, 0) }, 0, 4);
+		yamnetLayout.Controls.Add(_yamnetCooldownInput, 1, 4);
+		yamnetLayout.Controls.Add(yamnetHintLabel, 0, 5);
+		yamnetLayout.SetColumnSpan(yamnetHintLabel, 3);
+		yamnetGroup.Controls.Add(yamnetLayout);
 
 		var captureTargetGroup = new GroupBox
 		{
@@ -301,12 +389,13 @@ public sealed class SettingsPage : UserControl
 
 		root.Controls.Add(_nativeNvencCheckBox, 0, 0);
 		root.Controls.Add(recordingGroup, 0, 1);
-		root.Controls.Add(captureTargetGroup, 0, 2);
-		root.Controls.Add(hotkeyGroup, 0, 3);
-		root.Controls.Add(startupGroup, 0, 4);
-		root.Controls.Add(_configPathLabel, 0, 5);
-		root.Controls.Add(actions, 0, 6);
-		root.Controls.Add(_statusLabel, 0, 7);
+		root.Controls.Add(yamnetGroup, 0, 2);
+		root.Controls.Add(captureTargetGroup, 0, 3);
+		root.Controls.Add(hotkeyGroup, 0, 4);
+		root.Controls.Add(startupGroup, 0, 5);
+		root.Controls.Add(_configPathLabel, 0, 6);
+		root.Controls.Add(actions, 0, 7);
+		root.Controls.Add(_statusLabel, 0, 8);
 
 		Controls.Add(root);
 		UiTheme.ApplyPalette(this);
@@ -335,6 +424,11 @@ public sealed class SettingsPage : UserControl
 		_clipSecondsInput.Value = config.Recording.ClipSeconds;
 		_includeMicAudioCheckBox.Checked = config.Recording.IncludeMicAudio;
 		_includeSystemAudioCheckBox.Checked = config.Recording.IncludeSystemAudio;
+		_enableYamnetDetectionCheckBox.Checked = config.Recording.YamnetDetection.Enabled;
+		_yamnetModelPathTextBox.Text = config.Recording.YamnetDetection.ModelPath;
+		_yamnetSensitivityInput.Value = config.Recording.YamnetDetection.SensitivityPercent;
+		_yamnetCooldownInput.Value = config.Recording.YamnetDetection.CooldownSeconds;
+		UpdateYamnetInputs();
 		SelectCaptureTargetMode(config.Recording.CaptureTarget.Mode);
 		_monitorIndexInput.Value = Math.Max(_monitorIndexInput.Minimum, Math.Min(_monitorIndexInput.Maximum, config.Recording.CaptureTarget.MonitorIndex));
 		_executablePathTextBox.Text = config.Recording.CaptureTarget.ExecutablePath;
@@ -355,6 +449,16 @@ public sealed class SettingsPage : UserControl
 			return;
 		}
 
+		if (_enableYamnetDetectionCheckBox.Checked)
+		{
+			var yamnetValidation = YamnetModelValidator.Validate(_yamnetModelPathTextBox.Text.Trim());
+			if (!yamnetValidation.IsValid)
+			{
+				_statusLabel.Text = $"Status: {yamnetValidation.Message}";
+				return;
+			}
+		}
+
 		var config = new AppConfig
 		{
 			NativeNvencEnabled = _nativeNvencCheckBox.Checked,
@@ -370,6 +474,13 @@ public sealed class SettingsPage : UserControl
 				ClipSeconds = (int)_clipSecondsInput.Value,
 				IncludeMicAudio = _includeMicAudioCheckBox.Checked,
 				IncludeSystemAudio = _includeSystemAudioCheckBox.Checked,
+				YamnetDetection = new AppConfig.YamnetDetectionConfig
+				{
+					Enabled = _enableYamnetDetectionCheckBox.Checked,
+					ModelPath = _yamnetModelPathTextBox.Text.Trim(),
+					SensitivityPercent = (int)_yamnetSensitivityInput.Value,
+					CooldownSeconds = (int)_yamnetCooldownInput.Value
+				},
 				CaptureTarget = new AppConfig.CaptureTargetConfig
 				{
 					Mode = GetSelectedCaptureTargetMode(),
@@ -422,6 +533,26 @@ public sealed class SettingsPage : UserControl
 		{
 			_executablePathTextBox.Text = dialog.FileName;
 		}
+	}
+
+	private void BrowseYamnetModelPath()
+	{
+		using var dialog = new OpenFileDialog
+		{
+			Filter = "ONNX model (*.onnx)|*.onnx|All files (*.*)|*.*",
+			Title = "Select a YAMNet ONNX model"
+		};
+
+		if (dialog.ShowDialog(this) == DialogResult.OK)
+		{
+			_yamnetModelPathTextBox.Text = dialog.FileName;
+		}
+	}
+
+	private void ValidateYamnetModel()
+	{
+		var result = YamnetModelValidator.Validate(_yamnetModelPathTextBox.Text.Trim());
+		_statusLabel.Text = $"Status: {result.Message}";
 	}
 
 	private void ApplyModifiers(string modifiers)
@@ -492,6 +623,14 @@ public sealed class SettingsPage : UserControl
 		_startHiddenOnWindowsStartupCheckBox.Enabled = launchOnWindowsStartup;
 		_autoStartCaptureWhenHiddenLaunchCheckBox.Enabled =
 			launchOnWindowsStartup && _startHiddenOnWindowsStartupCheckBox.Checked;
+	}
+
+	private void UpdateYamnetInputs()
+	{
+		var enabled = _enableYamnetDetectionCheckBox.Checked;
+		_yamnetModelPathTextBox.Enabled = enabled;
+		_yamnetSensitivityInput.Enabled = enabled;
+		_yamnetCooldownInput.Enabled = enabled;
 	}
 
 	private static object[] GetKeyOptions()

@@ -18,6 +18,12 @@
 			"mode": "PrimaryMonitor",
 			"monitorIndex": 0,
 			"executablePath": ""
+		},
+		"yamnetDetection": {
+			"enabled": false,
+			"modelPath": "",
+			"sensitivityPercent": 65,
+			"cooldownSeconds": 15
 		}
 	}
 }

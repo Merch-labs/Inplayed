@@ -25,6 +25,13 @@ internal static class AppConfigStorage
 				Mode = CaptureTargetModes.PrimaryMonitor,
 				MonitorIndex = 0,
 				ExecutablePath = string.Empty
+			},
+			YamnetDetection = new AppConfig.YamnetDetectionConfig
+			{
+				Enabled = false,
+				ModelPath = string.Empty,
+				SensitivityPercent = 65,
+				CooldownSeconds = 15
 			}
 		},
 		Startup = new AppConfig.StartupConfig
@@ -74,6 +81,13 @@ internal static class AppConfigStorage
 					Mode = Default.Recording.CaptureTarget.Mode,
 					MonitorIndex = Default.Recording.CaptureTarget.MonitorIndex,
 					ExecutablePath = Default.Recording.CaptureTarget.ExecutablePath
+				},
+				YamnetDetection = new AppConfig.YamnetDetectionConfig
+				{
+					Enabled = Default.Recording.YamnetDetection.Enabled,
+					ModelPath = Default.Recording.YamnetDetection.ModelPath,
+					SensitivityPercent = Default.Recording.YamnetDetection.SensitivityPercent,
+					CooldownSeconds = Default.Recording.YamnetDetection.CooldownSeconds
 				}
 			},
 			Startup = new AppConfig.StartupConfig
@@ -170,6 +184,16 @@ internal static class AppConfigStorage
 				return false;
 			}
 
+			var yamnetDetection = TryReadYamnetDetection(recording, out var parsedYamnetDetection)
+				? parsedYamnetDetection
+				: new AppConfig.YamnetDetectionConfig
+				{
+					Enabled = Default.Recording.YamnetDetection.Enabled,
+					ModelPath = Default.Recording.YamnetDetection.ModelPath,
+					SensitivityPercent = Default.Recording.YamnetDetection.SensitivityPercent,
+					CooldownSeconds = Default.Recording.YamnetDetection.CooldownSeconds
+				};
+
 			var startup = TryReadStartup(root, out var parsedStartup)
 				? parsedStartup
 				: new AppConfig.StartupConfig
@@ -194,7 +218,8 @@ internal static class AppConfigStorage
 					ClipSeconds = clipSeconds,
 					IncludeMicAudio = includeMicAudio,
 					IncludeSystemAudio = includeSystemAudio,
-					CaptureTarget = captureTarget
+					CaptureTarget = captureTarget,
+					YamnetDetection = yamnetDetection
 				},
 				Startup = startup
 			};
@@ -240,6 +265,12 @@ internal static class AppConfigStorage
 			writer.WriteString("mode", config.Recording.CaptureTarget.Mode);
 			writer.WriteNumber("monitorIndex", config.Recording.CaptureTarget.MonitorIndex);
 			writer.WriteString("executablePath", config.Recording.CaptureTarget.ExecutablePath);
+			writer.WriteEndObject();
+			writer.WriteStartObject("yamnetDetection");
+			writer.WriteBoolean("enabled", config.Recording.YamnetDetection.Enabled);
+			writer.WriteString("modelPath", config.Recording.YamnetDetection.ModelPath);
+			writer.WriteNumber("sensitivityPercent", config.Recording.YamnetDetection.SensitivityPercent);
+			writer.WriteNumber("cooldownSeconds", config.Recording.YamnetDetection.CooldownSeconds);
 			writer.WriteEndObject();
 			writer.WriteEndObject();
 
@@ -302,6 +333,60 @@ internal static class AppConfigStorage
 			Mode = mode,
 			MonitorIndex = monitorIndex,
 			ExecutablePath = executablePath
+		};
+		return true;
+	}
+
+	private static bool TryReadYamnetDetection(JsonElement recording, out AppConfig.YamnetDetectionConfig yamnetDetection)
+	{
+		yamnetDetection = new AppConfig.YamnetDetectionConfig
+		{
+			Enabled = Default.Recording.YamnetDetection.Enabled,
+			ModelPath = Default.Recording.YamnetDetection.ModelPath,
+			SensitivityPercent = Default.Recording.YamnetDetection.SensitivityPercent,
+			CooldownSeconds = Default.Recording.YamnetDetection.CooldownSeconds
+		};
+
+		if (!recording.TryGetProperty("yamnetDetection", out var yamnetElement))
+		{
+			return false;
+		}
+
+		if (yamnetElement.ValueKind != JsonValueKind.Object)
+		{
+			return false;
+		}
+
+		if (!TryReadBool(yamnetElement, "enabled", out var enabled))
+		{
+			return false;
+		}
+
+		if (!TryReadString(yamnetElement, "modelPath", out var modelPath))
+		{
+			return false;
+		}
+
+		var sensitivityPercent = Default.Recording.YamnetDetection.SensitivityPercent;
+		if (yamnetElement.TryGetProperty("sensitivityPercent", out _)
+			&& !TryReadInt(yamnetElement, "sensitivityPercent", 1, 100, out sensitivityPercent))
+		{
+			return false;
+		}
+
+		var cooldownSeconds = Default.Recording.YamnetDetection.CooldownSeconds;
+		if (yamnetElement.TryGetProperty("cooldownSeconds", out _)
+			&& !TryReadInt(yamnetElement, "cooldownSeconds", 5, 120, out cooldownSeconds))
+		{
+			return false;
+		}
+
+		yamnetDetection = new AppConfig.YamnetDetectionConfig
+		{
+			Enabled = enabled,
+			ModelPath = modelPath,
+			SensitivityPercent = sensitivityPercent,
+			CooldownSeconds = cooldownSeconds
 		};
 		return true;
 	}
