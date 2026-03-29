@@ -78,9 +78,9 @@ Sources:
 ## Backend Server
 
 Used for:
-- `server/inplayed.Server/Program.cs`
-- `server/inplayed.Server/Data/SocialDbContext.cs`
-- `server/inplayed.Server/Models/*`
+- `server/Program.cs`
+- `server/Data/SocialDatabase.cs`
+- `server/Models/*`
 
 Sources:
 - ASP.NET Core minimal APIs: https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api

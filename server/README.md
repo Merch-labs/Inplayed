@@ -25,7 +25,7 @@ Default connection string location:
 ## Run
 
 ```powershell
-dotnet run --project server\inplayed.Server\inplayed.Server.csproj
+dotnet run --project server\server.csproj
 ```
 
 ## Main endpoints
