@@ -75,6 +75,17 @@ Sources:
 - Linear search overview: https://www.programiz.com/dsa/linear-search
 - `File.Exists` API: https://learn.microsoft.com/en-us/dotnet/api/system.io.file.exists
 
+## Backend Server
+
+Used for:
+- `server/inplayed.Server/Program.cs`
+- `server/inplayed.Server/Data/SocialDbContext.cs`
+- `server/inplayed.Server/Models/*`
+
+Sources:
+- ASP.NET Core minimal APIs: https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api
+- Npgsql EF Core provider: https://www.npgsql.org/efcore/
+
 ## General Style Target
 
 For this pass, the code outside `screenCapture/` was kept closer to:

@@ -21,18 +21,22 @@
     <Compile Remove="obj\**\*.cs" />
     <Compile Remove="artifacts\**\*.cs" />
     <Compile Remove="inplayed.Tests\**\*.cs" />
+    <Compile Remove="server\**\*.cs" />
     <EmbeddedResource Remove="bin\**\*" />
     <EmbeddedResource Remove="obj\**\*" />
     <EmbeddedResource Remove="artifacts\**\*" />
     <EmbeddedResource Remove="inplayed.Tests\**\*" />
+    <EmbeddedResource Remove="server\**\*" />
     <None Remove="bin\**\*" />
     <None Remove="obj\**\*" />
     <None Remove="artifacts\**\*" />
     <None Remove="inplayed.Tests\**\*" />
+    <None Remove="server\**\*" />
     <Page Remove="bin\**\*" />
     <Page Remove="obj\**\*" />
     <Page Remove="artifacts\**\*" />
     <Page Remove="inplayed.Tests\**\*" />
+    <Page Remove="server\**\*" />
   </ItemGroup>
 
   <ItemGroup>
