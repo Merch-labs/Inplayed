@@ -84,7 +84,8 @@ Used for:
 
 Sources:
 - ASP.NET Core minimal APIs: https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api
-- Npgsql EF Core provider: https://www.npgsql.org/efcore/
+- Npgsql basic usage: https://www.npgsql.org/doc/basic-usage.html
+- PostgreSQL tutorial: https://www.postgresql.org/docs/current/tutorial.html
 
 ## General Style Target
 

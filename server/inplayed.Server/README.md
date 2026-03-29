@@ -13,7 +13,10 @@ It currently supports:
 
 ## Database
 
-The server uses PostgreSQL through Entity Framework Core.
+The server uses PostgreSQL.
+
+The table setup is in:
+- `sql/schema.sql`
 
 Default connection string location:
 - `appsettings.json`

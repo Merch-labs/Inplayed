@@ -8,8 +8,6 @@ internal sealed class FriendRequest
 	public FriendRequestStatus Status { get; set; } = FriendRequestStatus.Pending;
 	public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 	public DateTime? RespondedAtUtc { get; set; }
-	public SocialUser? Requester { get; set; }
-	public SocialUser? Recipient { get; set; }
 }
 
 internal enum FriendRequestStatus
