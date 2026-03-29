@@ -413,20 +413,24 @@ public sealed class SettingsPage : UserControl
 		var reloadButton = new Button { Text = "Reload", AutoSize = true };
 		var defaultsButton = new Button { Text = "Reset Defaults", AutoSize = true };
 		var openConfigButton = new Button { Text = "Open Config File", AutoSize = true };
+		var testSocialDatabaseButton = new Button { Text = "Test Social Database", AutoSize = true };
 		UiTheme.StyleAccentButton(saveButton);
 		UiTheme.StyleSecondaryButton(reloadButton);
 		UiTheme.StyleSecondaryButton(defaultsButton);
 		UiTheme.StyleSecondaryButton(openConfigButton);
+		UiTheme.StyleSecondaryButton(testSocialDatabaseButton);
 
 		saveButton.Click += (_, _) => SaveSettings();
 		reloadButton.Click += (_, _) => LoadSettings();
 		defaultsButton.Click += (_, _) => LoadDefaults();
 		openConfigButton.Click += (_, _) => OpenConfigFile();
+		testSocialDatabaseButton.Click += (_, _) => TestSocialDatabase();
 
 		actions.Controls.Add(saveButton);
 		actions.Controls.Add(reloadButton);
 		actions.Controls.Add(defaultsButton);
 		actions.Controls.Add(openConfigButton);
+		actions.Controls.Add(testSocialDatabaseButton);
 
 		_statusLabel = new Label
 		{
@@ -511,6 +515,17 @@ public sealed class SettingsPage : UserControl
 			}
 		}
 
+		var socialConnectionString = _socialDatabaseConnectionStringTextBox.Text.Trim();
+		if (!string.IsNullOrWhiteSpace(socialConnectionString))
+		{
+			var socialUsername = _socialUsernameTextBox.Text.Trim();
+			if (!SocialDatabaseStore.TryConnect(socialConnectionString, socialUsername, out var socialMessage))
+			{
+				_statusLabel.Text = $"Status: social database failed: {socialMessage}";
+				return;
+			}
+		}
+
 		var config = new AppConfig
 		{
 			NativeNvencEnabled = _nativeNvencCheckBox.Checked,
@@ -576,6 +591,19 @@ public sealed class SettingsPage : UserControl
 		}
 
 		System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+	}
+
+	private void TestSocialDatabase()
+	{
+		var connectionString = _socialDatabaseConnectionStringTextBox.Text.Trim();
+		var username = _socialUsernameTextBox.Text.Trim();
+		if (SocialDatabaseStore.TryConnect(connectionString, username, out var message))
+		{
+			_statusLabel.Text = $"Status: {message}";
+			return;
+		}
+
+		_statusLabel.Text = $"Status: social database failed: {message}";
 	}
 
 	private void BrowseExecutablePath()

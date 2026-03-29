@@ -8,6 +8,36 @@ internal sealed class SocialDatabaseStore
 	private readonly string _connectionString;
 	private int _currentUserId;
 
+	public static bool TryConnect(string connectionString, string username, out string message)
+	{
+		message = string.Empty;
+
+		var trimmedConnectionString = connectionString?.Trim() ?? string.Empty;
+		if (string.IsNullOrWhiteSpace(trimmedConnectionString))
+		{
+			message = "Enter a database connection string first.";
+			return false;
+		}
+
+		var trimmedUsername = username?.Trim();
+		if (string.IsNullOrWhiteSpace(trimmedUsername))
+		{
+			trimmedUsername = Environment.UserName;
+		}
+
+		try
+		{
+			_ = new SocialDatabaseStore(trimmedConnectionString, trimmedUsername);
+			message = "Connected to the social database.";
+			return true;
+		}
+		catch (Exception ex)
+		{
+			message = ex.Message;
+			return false;
+		}
+	}
+
 	public SocialDatabaseStore(string connectionString, string username)
 	{
 		_connectionString = connectionString;
