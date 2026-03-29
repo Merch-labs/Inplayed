@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS users
+CREATE TABLE users
 (
     id UUID PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users
     created_at_utc TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS friend_requests
+CREATE TABLE friend_requests
 (
     id UUID PRIMARY KEY,
     requester_id UUID NOT NULL REFERENCES users(id),
@@ -16,14 +16,14 @@ CREATE TABLE IF NOT EXISTS friend_requests
     responded_at_utc TIMESTAMPTZ NULL
 );
 
-CREATE TABLE IF NOT EXISTS conversations
+CREATE TABLE conversations
 (
     id UUID PRIMARY KEY,
     kind TEXT NOT NULL,
     created_at_utc TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS conversation_members
+CREATE TABLE conversation_members
 (
     conversation_id UUID NOT NULL REFERENCES conversations(id),
     user_id UUID NOT NULL REFERENCES users(id),
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS conversation_members
     PRIMARY KEY (conversation_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS messages
+CREATE TABLE messages
 (
     id UUID PRIMARY KEY,
     conversation_id UUID NOT NULL REFERENCES conversations(id),
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS messages
     created_at_utc TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS posts
+CREATE TABLE posts
 (
     id UUID PRIMARY KEY,
     author_id UUID NOT NULL REFERENCES users(id),
