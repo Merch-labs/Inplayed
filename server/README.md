@@ -1,50 +1,21 @@
-# inplayed Server
+# Social Database
 
-This is a self-hosted ASP.NET Core backend for social features.
+This folder now just holds the SQL setup for the social features.
 
-It currently supports:
-- users
-- friend requests
-- friends list
-- direct conversations
-- messages
-- social posts
-- a basic feed
+The desktop app connects to PostgreSQL directly.
 
-## Database
-
-The server uses PostgreSQL.
-
-The table setup is in:
+Files:
 - `sql/schema.sql`
 
 The schema uses:
 - integer IDs
-- `VARCHAR(...)` for text fields with clear size limits
-- `TIMESTAMP` for date and time values
+- `VARCHAR(...)` fields with size limits
+- `TIMESTAMP` values for dates and times
 
-Default connection string location:
-- `appsettings.json`
-- or `ConnectionStrings__SocialDatabase` environment variable
+To use it:
+1. create a PostgreSQL database
+2. run `sql/schema.sql`
+3. open the app settings page
+4. fill in `Social Database` with your username and connection string
 
-## Run
-
-```powershell
-dotnet run --project server\server.csproj
-```
-
-## Main endpoints
-
-- `GET /health`
-- `POST /users`
-- `GET /users`
-- `GET /users/{userId}`
-- `POST /friend-requests`
-- `POST /friend-requests/{requestId}/accept`
-- `GET /users/{userId}/friends`
-- `POST /conversations/direct`
-- `GET /users/{userId}/conversations`
-- `GET /conversations/{conversationId}/messages`
-- `POST /messages`
-- `POST /posts`
-- `GET /users/{userId}/feed`
+If no connection string is saved, the app falls back to local JSON storage for social data.

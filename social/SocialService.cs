@@ -2,21 +2,55 @@ namespace inplayed;
 
 internal sealed class SocialService
 {
-	private readonly LocalSocialStore _store;
-	private readonly SocialState _state;
+	private readonly LocalSocialStore? _store;
+	private readonly SocialDatabaseStore? _databaseStore;
+	private readonly SocialState? _state;
 
 	public SocialService(LocalSocialStore? store = null)
 	{
-		_store = store ?? new LocalSocialStore();
+		if (store != null)
+		{
+			_store = store;
+			_state = _store.Load();
+			NormalizeState();
+			return;
+		}
+
+		var config = AppConfig.Load();
+		var connectionString = config.Social.DatabaseConnectionString?.Trim() ?? string.Empty;
+		if (!string.IsNullOrWhiteSpace(connectionString))
+		{
+			var username = config.Social.Username?.Trim();
+			if (string.IsNullOrWhiteSpace(username))
+			{
+				username = Environment.UserName;
+			}
+
+			try
+			{
+				_databaseStore = new SocialDatabaseStore(connectionString, username);
+				return;
+			}
+			catch
+			{
+			}
+		}
+
+		_store = new LocalSocialStore();
 		_state = _store.Load();
 		NormalizeState();
 	}
 
 	public IReadOnlyList<string> GetFriends()
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.GetFriends();
+		}
+
 		var friends = new List<string>();
 
-		foreach (var conversation in _state.Conversations)
+		foreach (var conversation in _state!.Conversations)
 		{
 			if (!string.IsNullOrWhiteSpace(conversation.FriendName))
 			{
@@ -31,6 +65,11 @@ internal sealed class SocialService
 
 	public IReadOnlyList<SocialMessage> GetMessages(string friendName)
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.GetMessages(friendName);
+		}
+
 		var conversation = FindConversation(friendName);
 		if (conversation == null)
 		{
@@ -50,13 +89,18 @@ internal sealed class SocialService
 
 	public bool AddFriend(string rawName, out string normalizedName)
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.AddFriend(rawName, out normalizedName);
+		}
+
 		normalizedName = NormalizeName(rawName);
 		if (string.IsNullOrWhiteSpace(normalizedName) || FindConversation(normalizedName) != null)
 		{
 			return false;
 		}
 
-		_state.Conversations.Add(new SocialConversation
+		_state!.Conversations.Add(new SocialConversation
 		{
 			FriendName = normalizedName
 		});
@@ -66,19 +110,29 @@ internal sealed class SocialService
 
 	public bool RemoveFriend(string friendName)
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.RemoveFriend(friendName);
+		}
+
 		var conversation = FindConversation(friendName);
 		if (conversation == null)
 		{
 			return false;
 		}
 
-		_state.Conversations.Remove(conversation);
+		_state!.Conversations.Remove(conversation);
 		Persist();
 		return true;
 	}
 
 	public SocialMessage? SendTextMessage(string friendName, string rawMessage)
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.SendTextMessage(friendName, rawMessage);
+		}
+
 		var messageBody = rawMessage.Trim();
 		if (string.IsNullOrWhiteSpace(messageBody))
 		{
@@ -106,6 +160,11 @@ internal sealed class SocialService
 
 	public SocialMessage? ShareClip(string friendName, string clipPath, string caption)
 	{
+		if (_databaseStore != null)
+		{
+			return _databaseStore.ShareClip(friendName, clipPath, caption);
+		}
+
 		if (string.IsNullOrWhiteSpace(clipPath))
 		{
 			return null;
@@ -136,7 +195,7 @@ internal sealed class SocialService
 	{
 		var uniqueConversations = new Dictionary<string, SocialConversation>(StringComparer.OrdinalIgnoreCase);
 
-		foreach (var conversation in _state.Conversations)
+		foreach (var conversation in _state!.Conversations)
 		{
 			var normalizedName = NormalizeName(conversation.FriendName);
 			if (string.IsNullOrWhiteSpace(normalizedName))
@@ -191,7 +250,7 @@ internal sealed class SocialService
 	{
 		var normalizedName = NormalizeName(rawName);
 		if (TryFindFirstAlgorithm.Run(
-			_state.Conversations,
+			_state!.Conversations,
 			conversation => string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase),
 			out var conversation))
 		{
@@ -219,7 +278,7 @@ internal sealed class SocialService
 		{
 			FriendName = normalizedName
 		};
-		_state.Conversations.Add(conversation);
+		_state!.Conversations.Add(conversation);
 		return conversation;
 	}
 
@@ -250,6 +309,11 @@ internal sealed class SocialService
 
 	private void Persist()
 	{
+		if (_store == null || _state == null)
+		{
+			return;
+		}
+
 		_store.Save(_state);
 	}
 

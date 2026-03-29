@@ -39,6 +39,11 @@ internal static class AppConfigStorage
 			LaunchOnWindowsStartup = false,
 			StartHiddenOnWindowsStartup = true,
 			AutoStartCaptureWhenHiddenLaunch = true
+		},
+		Social = new AppConfig.SocialConfig
+		{
+			Username = Environment.UserName,
+			DatabaseConnectionString = string.Empty
 		}
 	};
 
@@ -95,6 +100,11 @@ internal static class AppConfigStorage
 				LaunchOnWindowsStartup = Default.Startup.LaunchOnWindowsStartup,
 				StartHiddenOnWindowsStartup = Default.Startup.StartHiddenOnWindowsStartup,
 				AutoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch
+			},
+			Social = new AppConfig.SocialConfig
+			{
+				Username = Default.Social.Username,
+				DatabaseConnectionString = Default.Social.DatabaseConnectionString
 			}
 		};
 	}
@@ -203,6 +213,14 @@ internal static class AppConfigStorage
 					AutoStartCaptureWhenHiddenLaunch = Default.Startup.AutoStartCaptureWhenHiddenLaunch
 				};
 
+			var social = TryReadSocial(root, out var parsedSocial)
+				? parsedSocial
+				: new AppConfig.SocialConfig
+				{
+					Username = Default.Social.Username,
+					DatabaseConnectionString = Default.Social.DatabaseConnectionString
+				};
+
 			config = new AppConfig
 			{
 				NativeNvencEnabled = nativeNvencElement.GetBoolean(),
@@ -221,7 +239,8 @@ internal static class AppConfigStorage
 					CaptureTarget = captureTarget,
 					YamnetDetection = yamnetDetection
 				},
-				Startup = startup
+				Startup = startup,
+				Social = social
 			};
 			return true;
 		}
@@ -278,6 +297,11 @@ internal static class AppConfigStorage
 			writer.WriteBoolean("launchOnWindowsStartup", config.Startup.LaunchOnWindowsStartup);
 			writer.WriteBoolean("startHiddenOnWindowsStartup", config.Startup.StartHiddenOnWindowsStartup);
 			writer.WriteBoolean("autoStartCaptureWhenHiddenLaunch", config.Startup.AutoStartCaptureWhenHiddenLaunch);
+			writer.WriteEndObject();
+
+			writer.WriteStartObject("social");
+			writer.WriteString("username", config.Social.Username);
+			writer.WriteString("databaseConnectionString", config.Social.DatabaseConnectionString);
 			writer.WriteEndObject();
 
 			writer.WriteEndObject();
@@ -434,6 +458,46 @@ internal static class AppConfigStorage
 			LaunchOnWindowsStartup = launchOnWindowsStartup,
 			StartHiddenOnWindowsStartup = startHiddenOnWindowsStartup,
 			AutoStartCaptureWhenHiddenLaunch = autoStartCaptureWhenHiddenLaunch
+		};
+		return true;
+	}
+
+	private static bool TryReadSocial(JsonElement root, out AppConfig.SocialConfig social)
+	{
+		social = new AppConfig.SocialConfig
+		{
+			Username = Default.Social.Username,
+			DatabaseConnectionString = Default.Social.DatabaseConnectionString
+		};
+
+		if (!root.TryGetProperty("social", out var socialElement))
+		{
+			return false;
+		}
+
+		if (socialElement.ValueKind != JsonValueKind.Object)
+		{
+			return false;
+		}
+
+		var username = Default.Social.Username;
+		if (socialElement.TryGetProperty("username", out _)
+			&& !TryReadString(socialElement, "username", out username))
+		{
+			return false;
+		}
+
+		var databaseConnectionString = Default.Social.DatabaseConnectionString;
+		if (socialElement.TryGetProperty("databaseConnectionString", out _)
+			&& !TryReadString(socialElement, "databaseConnectionString", out databaseConnectionString))
+		{
+			return false;
+		}
+
+		social = new AppConfig.SocialConfig
+		{
+			Username = username,
+			DatabaseConnectionString = databaseConnectionString
 		};
 		return true;
 	}

@@ -25,5 +25,14 @@
 			"sensitivityPercent": 65,
 			"cooldownSeconds": 15
 		}
+	},
+	"startup": {
+		"launchOnWindowsStartup": false,
+		"startHiddenOnWindowsStartup": true,
+		"autoStartCaptureWhenHiddenLaunch": true
+	},
+	"social": {
+		"username": "",
+		"databaseConnectionString": ""
 	}
 }

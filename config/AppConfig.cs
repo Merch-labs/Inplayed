@@ -8,6 +8,7 @@ internal sealed class AppConfig
 	public HotkeyConfig SaveClipHotkey { get; init; } = new();
 	public RecordingConfig Recording { get; init; } = new();
 	public StartupConfig Startup { get; init; } = new();
+	public SocialConfig Social { get; init; } = new();
 
 	public static AppConfig Load()
 	{
@@ -95,6 +96,12 @@ internal sealed class AppConfig
 		public bool LaunchOnWindowsStartup { get; init; }
 		public bool StartHiddenOnWindowsStartup { get; init; } = true;
 		public bool AutoStartCaptureWhenHiddenLaunch { get; init; } = true;
+	}
+
+	internal sealed class SocialConfig
+	{
+		public string Username { get; init; } = Environment.UserName;
+		public string DatabaseConnectionString { get; init; } = string.Empty;
 	}
 
 	internal sealed class YamnetDetectionConfig
