@@ -2,9 +2,9 @@ using System.IO;
 
 namespace inplayed;
 
-internal static class PathAlgorithms
+internal static class FindFirstExistingDistinctPathAlgorithm
 {
-	public static string FindFirstExistingDistinctPath(IEnumerable<string> candidatePaths)
+	public static string Run(IEnumerable<string> candidatePaths)
 	{
 		var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

@@ -64,9 +64,11 @@ Sources:
 ## Algorithms
 
 Used for:
-- `algorithms/SortingAlgorithms.cs`
-- `algorithms/SearchAlgorithms.cs`
-- `algorithms/PathAlgorithms.cs`
+- `algorithms/ContainsAlgorithm.cs`
+- `algorithms/FindIndexAlgorithm.cs`
+- `algorithms/FindFirstExistingDistinctPathAlgorithm.cs`
+- `algorithms/InsertionSortAlgorithm.cs`
+- `algorithms/TryFindFirstAlgorithm.cs`
 
 Sources:
 - Insertion sort overview: https://www.programiz.com/dsa/insertion-sort

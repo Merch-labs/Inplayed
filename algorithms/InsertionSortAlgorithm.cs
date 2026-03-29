@@ -1,8 +1,8 @@
 namespace inplayed;
 
-internal static class SortingAlgorithms
+internal static class InsertionSortAlgorithm
 {
-	public static List<T> InsertionSort<T>(IEnumerable<T> items, Comparison<T> comparison)
+	public static List<T> Run<T>(IEnumerable<T> items, Comparison<T> comparison)
 	{
 		var sortedItems = new List<T>();
 

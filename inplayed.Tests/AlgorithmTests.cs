@@ -15,7 +15,7 @@ public sealed class AlgorithmTests : IDisposable
 	{
 		var items = new List<string> { "charlie", "Alice", "bob" };
 
-		var sorted = SortingAlgorithms.InsertionSort(
+		var sorted = InsertionSortAlgorithm.Run(
 			items,
 			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left, right));
 
@@ -27,7 +27,7 @@ public sealed class AlgorithmTests : IDisposable
 	{
 		var items = new List<string> { "alice", "bob", "charlie" };
 
-		var found = SearchAlgorithms.TryFindFirst(
+		var found = TryFindFirstAlgorithm.Run(
 			items,
 			item => string.Equals(item, "BOB", StringComparison.OrdinalIgnoreCase),
 			out var result);
@@ -41,7 +41,7 @@ public sealed class AlgorithmTests : IDisposable
 	{
 		System.Collections.IList items = new List<object?> { "F1", "F2", "F3" };
 
-		var index = SearchAlgorithms.FindIndex(
+		var index = FindIndexAlgorithm.Run(
 			items,
 			item => string.Equals(item as string, "f2", StringComparison.OrdinalIgnoreCase));
 
@@ -55,7 +55,7 @@ public sealed class AlgorithmTests : IDisposable
 		var secondPath = Path.Combine(_tempDirectory, "second.txt");
 		File.WriteAllText(secondPath, "test");
 
-		var resolvedPath = PathAlgorithms.FindFirstExistingDistinctPath(
+		var resolvedPath = FindFirstExistingDistinctPathAlgorithm.Run(
 			[
 				firstPath,
 				secondPath,
@@ -63,6 +63,18 @@ public sealed class AlgorithmTests : IDisposable
 			]);
 
 		Assert.Equal(secondPath, resolvedPath);
+	}
+
+	[Fact]
+	public void ContainsAlgorithm_ReturnsTrueWhenItemMatches()
+	{
+		var friends = new List<string> { "alice", "bob", "charlie" };
+
+		var found = ContainsAlgorithm.Run(
+			friends,
+			friend => string.Equals(friend, "BOB", StringComparison.OrdinalIgnoreCase));
+
+		Assert.True(found);
 	}
 
 	public void Dispose()

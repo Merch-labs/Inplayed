@@ -24,7 +24,7 @@ internal sealed class SocialService
 			}
 		}
 
-		return SortingAlgorithms.InsertionSort(
+		return InsertionSortAlgorithm.Run(
 			friends,
 			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left, right));
 	}
@@ -43,7 +43,7 @@ internal sealed class SocialService
 			messages.Add(message);
 		}
 
-		return SortingAlgorithms.InsertionSort(
+		return InsertionSortAlgorithm.Run(
 			messages,
 			(left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
 	}
@@ -159,7 +159,7 @@ internal sealed class SocialService
 				orderedMessages.Add(message);
 			}
 
-			orderedMessages = SortingAlgorithms.InsertionSort(
+			orderedMessages = InsertionSortAlgorithm.Run(
 				orderedMessages,
 				(left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
 			foreach (var message in orderedMessages)
@@ -175,7 +175,7 @@ internal sealed class SocialService
 			sortedConversations.Add(conversation);
 		}
 
-		sortedConversations = SortingAlgorithms.InsertionSort(
+		sortedConversations = InsertionSortAlgorithm.Run(
 			sortedConversations,
 			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.FriendName, right.FriendName));
 
@@ -190,7 +190,7 @@ internal sealed class SocialService
 	private SocialConversation? FindConversation(string rawName)
 	{
 		var normalizedName = NormalizeName(rawName);
-		if (SearchAlgorithms.TryFindFirst(
+		if (TryFindFirstAlgorithm.Run(
 			_state.Conversations,
 			conversation => string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase),
 			out var conversation))

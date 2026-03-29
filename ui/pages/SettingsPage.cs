@@ -602,7 +602,7 @@ public sealed class SettingsPage : UserControl
 	private void SelectHotkeyKey(string key)
 	{
 		var upperKey = key.ToUpperInvariant();
-		var idx = SearchAlgorithms.FindIndex(
+		var idx = FindIndexAlgorithm.Run(
 			_hotkeyComboBox.Items,
 			item => string.Equals(item as string, upperKey, StringComparison.OrdinalIgnoreCase));
 
@@ -611,7 +611,7 @@ public sealed class SettingsPage : UserControl
 
 	private void SelectCaptureTargetMode(string mode)
 	{
-		var selectedIndex = SearchAlgorithms.FindIndex(
+		var selectedIndex = FindIndexAlgorithm.Run(
 			_captureTargetModeComboBox.Items,
 			item =>
 			{

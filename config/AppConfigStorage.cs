@@ -490,7 +490,7 @@ internal static class AppConfigStorage
 			dir = dir.Parent;
 		}
 
-		var resolvedPath = PathAlgorithms.FindFirstExistingDistinctPath(candidates);
+		var resolvedPath = FindFirstExistingDistinctPathAlgorithm.Run(candidates);
 		if (!string.IsNullOrWhiteSpace(resolvedPath))
 		{
 			return resolvedPath;

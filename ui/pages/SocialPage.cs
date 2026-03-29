@@ -324,7 +324,7 @@ public sealed class SocialPage : UserControl
 		var friendToSelect = selectedFriend;
 		var selectedFriendExists =
 			!string.IsNullOrWhiteSpace(friendToSelect) &&
-			SearchAlgorithms.Contains(
+			ContainsAlgorithm.Run(
 				friends,
 				friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase));
 
@@ -333,7 +333,7 @@ public sealed class SocialPage : UserControl
 			friendToSelect = friends[0];
 		}
 
-		if (SearchAlgorithms.TryFindFirst(
+		if (TryFindFirstAlgorithm.Run(
 			friends,
 			friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase),
 			out var selectedFriendItem))
