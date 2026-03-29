@@ -61,6 +61,18 @@ Sources:
 - ONNX Runtime C# getting started: https://onnxruntime.ai/docs/get-started/with-csharp.html
 - MediaPipe Audio Classifier guide: https://ai.google.dev/edge/mediapipe/solutions/audio/audio_classifier
 
+## Algorithms
+
+Used for:
+- `algorithms/SortingAlgorithms.cs`
+- `algorithms/SearchAlgorithms.cs`
+- `algorithms/PathAlgorithms.cs`
+
+Sources:
+- Insertion sort overview: https://www.programiz.com/dsa/insertion-sort
+- Linear search overview: https://www.programiz.com/dsa/linear-search
+- `File.Exists` API: https://learn.microsoft.com/en-us/dotnet/api/system.io.file.exists
+
 ## General Style Target
 
 For this pass, the code outside `screenCapture/` was kept closer to:

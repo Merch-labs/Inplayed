@@ -601,23 +601,30 @@ public sealed class SettingsPage : UserControl
 
 	private void SelectHotkeyKey(string key)
 	{
-		var idx = _hotkeyComboBox.Items.IndexOf(key.ToUpperInvariant());
+		var upperKey = key.ToUpperInvariant();
+		var idx = SearchAlgorithms.FindIndex(
+			_hotkeyComboBox.Items,
+			item => string.Equals(item as string, upperKey, StringComparison.OrdinalIgnoreCase));
+
 		_hotkeyComboBox.SelectedIndex = idx >= 0 ? idx : 0;
 	}
 
 	private void SelectCaptureTargetMode(string mode)
 	{
-		for (var i = 0; i < _captureTargetModeComboBox.Items.Count; i++)
-		{
-			if (_captureTargetModeComboBox.Items[i] is CaptureTargetOption option &&
-				string.Equals(option.Mode, mode, StringComparison.OrdinalIgnoreCase))
+		var selectedIndex = SearchAlgorithms.FindIndex(
+			_captureTargetModeComboBox.Items,
+			item =>
 			{
-				_captureTargetModeComboBox.SelectedIndex = i;
-				return;
-			}
-		}
+				var option = item as CaptureTargetOption;
+				if (option == null)
+				{
+					return false;
+				}
 
-		_captureTargetModeComboBox.SelectedIndex = 0;
+				return string.Equals(option.Mode, mode, StringComparison.OrdinalIgnoreCase);
+			});
+
+		_captureTargetModeComboBox.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
 	}
 
 	private string GetSelectedCaptureTargetMode()

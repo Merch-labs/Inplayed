@@ -24,8 +24,9 @@ internal sealed class SocialService
 			}
 		}
 
-		friends.Sort(StringComparer.OrdinalIgnoreCase);
-		return friends;
+		return SortingAlgorithms.InsertionSort(
+			friends,
+			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left, right));
 	}
 
 	public IReadOnlyList<SocialMessage> GetMessages(string friendName)
@@ -42,8 +43,9 @@ internal sealed class SocialService
 			messages.Add(message);
 		}
 
-		messages.Sort((left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
-		return messages;
+		return SortingAlgorithms.InsertionSort(
+			messages,
+			(left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
 	}
 
 	public bool AddFriend(string rawName, out string normalizedName)
@@ -157,7 +159,9 @@ internal sealed class SocialService
 				orderedMessages.Add(message);
 			}
 
-			orderedMessages.Sort((left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
+			orderedMessages = SortingAlgorithms.InsertionSort(
+				orderedMessages,
+				(left, right) => left.CreatedAtUtc.CompareTo(right.CreatedAtUtc));
 			foreach (var message in orderedMessages)
 			{
 				target.Messages.Add(NormalizeMessage(message));
@@ -171,8 +175,9 @@ internal sealed class SocialService
 			sortedConversations.Add(conversation);
 		}
 
-		sortedConversations.Sort((left, right) =>
-			StringComparer.OrdinalIgnoreCase.Compare(left.FriendName, right.FriendName));
+		sortedConversations = SortingAlgorithms.InsertionSort(
+			sortedConversations,
+			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.FriendName, right.FriendName));
 
 		foreach (var conversation in sortedConversations)
 		{
@@ -185,13 +190,12 @@ internal sealed class SocialService
 	private SocialConversation? FindConversation(string rawName)
 	{
 		var normalizedName = NormalizeName(rawName);
-
-		foreach (var conversation in _state.Conversations)
+		if (SearchAlgorithms.TryFindFirst(
+			_state.Conversations,
+			conversation => string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase),
+			out var conversation))
 		{
-			if (string.Equals(conversation.FriendName, normalizedName, StringComparison.OrdinalIgnoreCase))
-			{
-				return conversation;
-			}
+			return conversation;
 		}
 
 		return null;

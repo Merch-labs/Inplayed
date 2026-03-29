@@ -322,31 +322,23 @@ public sealed class SocialPage : UserControl
 		}
 
 		var friendToSelect = selectedFriend;
-		var selectedFriendExists = false;
-		if (!string.IsNullOrWhiteSpace(friendToSelect))
-		{
-			foreach (var friend in friends)
-			{
-				if (string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase))
-				{
-					selectedFriendExists = true;
-					break;
-				}
-			}
-		}
+		var selectedFriendExists =
+			!string.IsNullOrWhiteSpace(friendToSelect) &&
+			SearchAlgorithms.Contains(
+				friends,
+				friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase));
 
 		if (string.IsNullOrWhiteSpace(friendToSelect) || !selectedFriendExists)
 		{
 			friendToSelect = friends[0];
 		}
 
-		foreach (var friend in friends)
+		if (SearchAlgorithms.TryFindFirst(
+			friends,
+			friend => string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase),
+			out var selectedFriendItem))
 		{
-			if (string.Equals(friend, friendToSelect, StringComparison.OrdinalIgnoreCase))
-			{
-				_friendsList.SelectedItem = friend;
-				break;
-			}
+			_friendsList.SelectedItem = selectedFriendItem;
 		}
 
 		RefreshConversation();
