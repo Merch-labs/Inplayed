@@ -195,6 +195,12 @@ public sealed class LibraryPage : UserControl
 
 	private void ReloadFriends()
 	{
+		if (!_socialService.IsDatabaseConfigured || !_socialService.IsLoggedIn)
+		{
+			_friendComboBox.DataSource = new List<string>();
+			return;
+		}
+
 		var friends = _socialService.GetFriends().ToList();
 		_friendComboBox.DataSource = friends;
 		if (friends.Count > 0)
@@ -224,6 +230,18 @@ public sealed class LibraryPage : UserControl
 
 	private void ShareSelectedClip()
 	{
+		if (!_socialService.IsDatabaseConfigured)
+		{
+			_statusLabel.Text = "Status: set up the social database in Settings first";
+			return;
+		}
+
+		if (!_socialService.IsLoggedIn)
+		{
+			_statusLabel.Text = "Status: log in on the Social page first";
+			return;
+		}
+
 		var path = GetSelectedClipPath();
 		if (string.IsNullOrWhiteSpace(path))
 		{

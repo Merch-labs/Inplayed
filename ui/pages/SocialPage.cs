@@ -8,10 +8,21 @@ public sealed class SocialPage : UserControl
 {
 	private static readonly Color ClipBubbleColor = Color.FromArgb(232, 237, 243);
 	private readonly BindingSource _friendsSource = new();
+	private readonly BindingSource _requestsSource = new();
 	private readonly SocialService _socialService = new();
 	private readonly SplitContainer _splitContainer;
+	private readonly TextBox _usernameInput;
+	private readonly TextBox _displayNameInput;
+	private readonly TextBox _passwordInput;
+	private readonly Button _loginButton;
+	private readonly Button _createAccountButton;
+	private readonly Button _logoutButton;
+	private readonly Label _authLabel;
 	private readonly ListBox _friendsList;
 	private readonly TextBox _friendNameInput;
+	private readonly ListBox _pendingRequestsList;
+	private readonly Button _acceptRequestButton;
+	private readonly Button _rejectRequestButton;
 	private readonly Button _backButton;
 	private readonly Label _conversationTitleLabel;
 	private readonly FlowLayoutPanel _messagesPanel;
@@ -26,11 +37,12 @@ public sealed class SocialPage : UserControl
 		var root = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 2,
+			RowCount = 3,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
+		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
@@ -38,15 +50,17 @@ public sealed class SocialPage : UserControl
 		{
 			AutoSize = true,
 			Padding = new Padding(0, 0, 0, 8),
-			Text = "Messages and shared clips from your conversations.",
+			Text = "Log in to send friend requests, message friends, and share clips.",
 			ForeColor = UiTheme.SecondaryTextColor
 		};
+
+		var authPanel = BuildAuthPanel();
 
 		_splitContainer = new SplitContainer
 		{
 			Dock = DockStyle.Fill,
 			Orientation = Orientation.Vertical,
-			SplitterDistance = 240,
+			SplitterDistance = 280,
 			BackColor = UiTheme.ShellBackground
 		};
 
@@ -56,10 +70,21 @@ public sealed class SocialPage : UserControl
 		_splitContainer.Panel2.Controls.Add(rightPanel);
 
 		root.Controls.Add(header, 0, 0);
-		root.Controls.Add(_splitContainer, 0, 1);
+		root.Controls.Add(authPanel, 0, 1);
+		root.Controls.Add(_splitContainer, 0, 2);
 		Controls.Add(root);
 
+		_usernameInput = (TextBox)authPanel.Controls.Find("usernameInput", true)[0];
+		_displayNameInput = (TextBox)authPanel.Controls.Find("displayNameInput", true)[0];
+		_passwordInput = (TextBox)authPanel.Controls.Find("passwordInput", true)[0];
+		_loginButton = (Button)authPanel.Controls.Find("loginButton", true)[0];
+		_createAccountButton = (Button)authPanel.Controls.Find("createAccountButton", true)[0];
+		_logoutButton = (Button)authPanel.Controls.Find("logoutButton", true)[0];
+		_authLabel = (Label)authPanel.Controls.Find("authLabel", true)[0];
 		_friendNameInput = (TextBox)leftPanel.Controls.Find("friendNameInput", true)[0];
+		_pendingRequestsList = (ListBox)leftPanel.Controls.Find("pendingRequestsList", true)[0];
+		_acceptRequestButton = (Button)leftPanel.Controls.Find("acceptRequestButton", true)[0];
+		_rejectRequestButton = (Button)leftPanel.Controls.Find("rejectRequestButton", true)[0];
 		_friendsList = (ListBox)leftPanel.Controls.Find("friendsList", true)[0];
 		_backButton = (Button)rightPanel.Controls.Find("backButton", true)[0];
 		_conversationTitleLabel = (Label)rightPanel.Controls.Find("conversationTitleLabel", true)[0];
@@ -68,22 +93,17 @@ public sealed class SocialPage : UserControl
 		_sendButton = (Button)rightPanel.Controls.Find("sendButton", true)[0];
 		_statusLabel = (Label)rightPanel.Controls.Find("statusLabel", true)[0];
 
-		var friends = new List<string>();
-		foreach (var friend in _socialService.GetFriends())
-		{
-			friends.Add(friend);
-		}
-
-		_friendsSource.DataSource = friends;
 		_friendsList.DataSource = _friendsSource;
+		_pendingRequestsList.DataSource = _requestsSource;
 		_friendsList.SelectedIndexChanged += (_, _) => RefreshConversation();
 		_friendsList.DoubleClick += (_, _) => OpenSelectedFriendConversation();
+		_pendingRequestsList.SelectedIndexChanged += (_, _) => UpdateInteractionState();
 		_messagesPanel.Resize += (_, _) => ResizeMessageCards();
 		_messageInput.KeyDown += HandleMessageInputKeyDown;
+		_usernameInput.Text = AppConfig.Load().Social.Username;
 
 		UiTheme.ApplyPalette(this);
-		RefreshFriends();
-		ShowProfilesOnly();
+		RefreshAuthenticationState();
 	}
 
 	protected override void OnVisibleChanged(EventArgs e)
@@ -91,8 +111,115 @@ public sealed class SocialPage : UserControl
 		base.OnVisibleChanged(e);
 		if (Visible)
 		{
-			RefreshFriends(GetSelectedFriend());
+			RefreshAuthenticationState();
 		}
+	}
+
+	private Control BuildAuthPanel()
+	{
+		var group = new GroupBox
+		{
+			Text = "Account",
+			Dock = DockStyle.Top,
+			AutoSize = true
+		};
+
+		var layout = new TableLayoutPanel
+		{
+			Dock = DockStyle.Fill,
+			AutoSize = true,
+			ColumnCount = 4,
+			RowCount = 3,
+			Padding = new Padding(8)
+		};
+		layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+
+		var usernameInput = new TextBox
+		{
+			Name = "usernameInput",
+			Width = 160,
+			PlaceholderText = "Username"
+		};
+
+		var displayNameInput = new TextBox
+		{
+			Name = "displayNameInput",
+			Width = 160,
+			PlaceholderText = "Display name"
+		};
+
+		var passwordInput = new TextBox
+		{
+			Name = "passwordInput",
+			Width = 160,
+			PlaceholderText = "Password",
+			UseSystemPasswordChar = true
+		};
+
+		var loginButton = new Button
+		{
+			Name = "loginButton",
+			Text = "Log In",
+			AutoSize = true
+		};
+		UiTheme.StyleAccentButton(loginButton);
+		loginButton.Click += (_, _) => LogIn();
+
+		var createAccountButton = new Button
+		{
+			Name = "createAccountButton",
+			Text = "Create Account",
+			AutoSize = true
+		};
+		UiTheme.StyleSecondaryButton(createAccountButton);
+		createAccountButton.Click += (_, _) => CreateAccount();
+
+		var logoutButton = new Button
+		{
+			Name = "logoutButton",
+			Text = "Log Out",
+			AutoSize = true
+		};
+		UiTheme.StyleSecondaryButton(logoutButton);
+		logoutButton.Click += (_, _) => LogOut();
+
+		var authLabel = new Label
+		{
+			Name = "authLabel",
+			AutoSize = true,
+			ForeColor = UiTheme.SecondaryTextColor,
+			Padding = new Padding(0, 6, 0, 0),
+			Text = "Status: ready"
+		};
+
+		layout.Controls.Add(new Label { AutoSize = true, Text = "Username", Margin = new Padding(0, 7, 8, 0) }, 0, 0);
+		layout.Controls.Add(usernameInput, 1, 0);
+		layout.Controls.Add(new Label { AutoSize = true, Text = "Display Name", Margin = new Padding(0, 7, 8, 0) }, 2, 0);
+		layout.Controls.Add(displayNameInput, 3, 0);
+		layout.Controls.Add(new Label { AutoSize = true, Text = "Password", Margin = new Padding(0, 7, 8, 0) }, 0, 1);
+		layout.Controls.Add(passwordInput, 1, 1);
+
+		var buttons = new FlowLayoutPanel
+		{
+			AutoSize = true,
+			Dock = DockStyle.Fill,
+			WrapContents = false,
+			FlowDirection = FlowDirection.LeftToRight
+		};
+		buttons.Controls.Add(loginButton);
+		buttons.Controls.Add(createAccountButton);
+		buttons.Controls.Add(logoutButton);
+
+		layout.Controls.Add(buttons, 2, 1);
+		layout.SetColumnSpan(buttons, 2);
+		layout.Controls.Add(authLabel, 0, 2);
+		layout.SetColumnSpan(authLabel, 4);
+
+		group.Controls.Add(layout);
+		return group;
 	}
 
 	private Control BuildFriendsPanel()
@@ -100,20 +227,22 @@ public sealed class SocialPage : UserControl
 		var panel = new TableLayoutPanel
 		{
 			Dock = DockStyle.Fill,
-			RowCount = 4,
+			RowCount = 6,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 35f));
 		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+		panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		panel.RowStyles.Add(new RowStyle(SizeType.Percent, 65f));
 
-		var title = new Label
+		var requestTitle = new Label
 		{
 			AutoSize = true,
-			Text = "Friends",
+			Text = "Send Friend Request",
 			ForeColor = UiTheme.SecondaryTextColor
 		};
 
@@ -131,17 +260,71 @@ public sealed class SocialPage : UserControl
 		{
 			Name = "friendNameInput",
 			Dock = DockStyle.Fill,
-			PlaceholderText = "Friend username"
+			PlaceholderText = "Existing username"
 		};
 		var addButton = new Button
 		{
-			Text = "Add",
+			Text = "Send Request",
 			AutoSize = true
 		};
 		UiTheme.StyleAccentButton(addButton);
-		addButton.Click += (_, _) => AddFriend(friendName.Text);
+		addButton.Click += (_, _) => SendFriendRequest();
 		addRow.Controls.Add(friendName, 0, 0);
 		addRow.Controls.Add(addButton, 1, 0);
+
+		var pendingRequestsList = new ListBox
+		{
+			Name = "pendingRequestsList",
+			Dock = DockStyle.Fill,
+			BackColor = UiTheme.SurfaceBackground
+		};
+
+		var pendingButtons = new FlowLayoutPanel
+		{
+			Dock = DockStyle.Fill,
+			AutoSize = true,
+			WrapContents = false,
+			FlowDirection = FlowDirection.LeftToRight,
+			BackColor = UiTheme.ShellBackground
+		};
+
+		var acceptButton = new Button
+		{
+			Name = "acceptRequestButton",
+			Text = "Accept",
+			AutoSize = true
+		};
+		UiTheme.StyleAccentButton(acceptButton);
+		acceptButton.Click += (_, _) => AcceptSelectedRequest();
+
+		var rejectButton = new Button
+		{
+			Name = "rejectRequestButton",
+			Text = "Reject",
+			AutoSize = true
+		};
+		UiTheme.StyleSecondaryButton(rejectButton);
+		rejectButton.Click += (_, _) => RejectSelectedRequest();
+
+		pendingButtons.Controls.Add(acceptButton);
+		pendingButtons.Controls.Add(rejectButton);
+
+		var friendsHeader = new FlowLayoutPanel
+		{
+			Dock = DockStyle.Fill,
+			AutoSize = true,
+			WrapContents = false,
+			FlowDirection = FlowDirection.LeftToRight,
+			BackColor = UiTheme.ShellBackground
+		};
+
+		var friendsTitle = new Label
+		{
+			AutoSize = true,
+			Padding = new Padding(0, 7, 8, 0),
+			Text = "Friends",
+			ForeColor = UiTheme.SecondaryTextColor
+		};
 
 		var removeButton = new Button
 		{
@@ -151,6 +334,9 @@ public sealed class SocialPage : UserControl
 		UiTheme.StyleSecondaryButton(removeButton);
 		removeButton.Click += (_, _) => RemoveSelectedFriend();
 
+		friendsHeader.Controls.Add(friendsTitle);
+		friendsHeader.Controls.Add(removeButton);
+
 		var friendsList = new ListBox
 		{
 			Name = "friendsList",
@@ -158,10 +344,12 @@ public sealed class SocialPage : UserControl
 			BackColor = UiTheme.SurfaceBackground
 		};
 
-		panel.Controls.Add(title, 0, 0);
+		panel.Controls.Add(requestTitle, 0, 0);
 		panel.Controls.Add(addRow, 0, 1);
-		panel.Controls.Add(removeButton, 0, 2);
-		panel.Controls.Add(friendsList, 0, 3);
+		panel.Controls.Add(pendingRequestsList, 0, 2);
+		panel.Controls.Add(pendingButtons, 0, 3);
+		panel.Controls.Add(friendsHeader, 0, 4);
+		panel.Controls.Add(friendsList, 0, 5);
 		return panel;
 	}
 
@@ -274,17 +462,86 @@ public sealed class SocialPage : UserControl
 		return panel;
 	}
 
-	private void AddFriend(string rawName)
+	private void CreateAccount()
 	{
-		if (!_socialService.AddFriend(rawName, out var normalizedName))
+		if (_socialService.CreateAccount(_usernameInput.Text, _displayNameInput.Text, _passwordInput.Text, out var message))
 		{
-			_statusLabel.Text = "Status: enter a unique friend name";
+			_passwordInput.Clear();
+			RefreshAuthenticationState();
+			_statusLabel.Text = $"Status: {message}";
 			return;
 		}
 
-		_friendNameInput.Clear();
-		RefreshFriends(normalizedName);
-		_statusLabel.Text = $"Status: added friend '{normalizedName}'";
+		_statusLabel.Text = $"Status: {message}";
+	}
+
+	private void LogIn()
+	{
+		if (_socialService.Login(_usernameInput.Text, _passwordInput.Text, out var message))
+		{
+			_passwordInput.Clear();
+			RefreshAuthenticationState();
+			_statusLabel.Text = $"Status: {message}";
+			return;
+		}
+
+		_statusLabel.Text = $"Status: {message}";
+	}
+
+	private void LogOut()
+	{
+		_socialService.Logout();
+		RefreshAuthenticationState();
+		_statusLabel.Text = "Status: logged out";
+	}
+
+	private void SendFriendRequest()
+	{
+		if (_socialService.SendFriendRequest(_friendNameInput.Text, out var normalizedUsername, out var message))
+		{
+			_friendNameInput.Clear();
+			RefreshPendingRequests();
+			_statusLabel.Text = $"Status: sent request to @{normalizedUsername}";
+			return;
+		}
+
+		_statusLabel.Text = $"Status: {message}";
+	}
+
+	private void AcceptSelectedRequest()
+	{
+		if (_pendingRequestsList.SelectedItem is not SocialFriendRequest request)
+		{
+			_statusLabel.Text = "Status: select a friend request first";
+			return;
+		}
+
+		if (_socialService.AcceptFriendRequest(request.Id, out var message))
+		{
+			RefreshAllSocialData(request.DisplayName);
+			_statusLabel.Text = $"Status: {message}";
+			return;
+		}
+
+		_statusLabel.Text = $"Status: {message}";
+	}
+
+	private void RejectSelectedRequest()
+	{
+		if (_pendingRequestsList.SelectedItem is not SocialFriendRequest request)
+		{
+			_statusLabel.Text = "Status: select a friend request first";
+			return;
+		}
+
+		if (_socialService.RejectFriendRequest(request.Id, out var message))
+		{
+			RefreshPendingRequests();
+			_statusLabel.Text = $"Status: {message}";
+			return;
+		}
+
+		_statusLabel.Text = $"Status: {message}";
 	}
 
 	private void RemoveSelectedFriend()
@@ -300,7 +557,58 @@ public sealed class SocialPage : UserControl
 		{
 			RefreshFriends();
 			_statusLabel.Text = $"Status: removed '{selectedFriend}'";
+			return;
 		}
+
+		_statusLabel.Text = "Status: could not remove friend";
+	}
+
+	private void RefreshAuthenticationState()
+	{
+		if (!_socialService.IsDatabaseConfigured)
+		{
+			_authLabel.Text = "Set the social database connection in Settings first.";
+			_friendsSource.DataSource = new List<string>();
+			_requestsSource.DataSource = new List<SocialFriendRequest>();
+			_messagesPanel.Controls.Clear();
+			_conversationTitleLabel.Text = "Set up the social database in Settings";
+			ShowProfilesOnly();
+			UpdateInteractionState();
+			return;
+		}
+
+		if (!_socialService.IsLoggedIn)
+		{
+			_authLabel.Text = "Log in or create an account to use social features.";
+			_friendsSource.DataSource = new List<string>();
+			_requestsSource.DataSource = new List<SocialFriendRequest>();
+			_messagesPanel.Controls.Clear();
+			_conversationTitleLabel.Text = "Log in to start messaging";
+			ShowProfilesOnly();
+			UpdateInteractionState();
+			return;
+		}
+
+		_authLabel.Text = $"Logged in as {_socialService.CurrentDisplayName} (@{_socialService.CurrentUsername})";
+		RefreshAllSocialData();
+	}
+
+	private void RefreshAllSocialData(string? selectedFriend = null)
+	{
+		RefreshPendingRequests();
+		RefreshFriends(selectedFriend);
+		UpdateInteractionState();
+	}
+
+	private void RefreshPendingRequests()
+	{
+		var requests = new List<SocialFriendRequest>();
+		foreach (var request in _socialService.GetPendingFriendRequests())
+		{
+			requests.Add(request);
+		}
+
+		_requestsSource.DataSource = requests;
 	}
 
 	private void RefreshFriends(string? selectedFriend = null)
@@ -315,7 +623,7 @@ public sealed class SocialPage : UserControl
 
 		if (friends.Count == 0)
 		{
-			_conversationTitleLabel.Text = "Select a friend to start messaging";
+			_conversationTitleLabel.Text = "Accept a friend request to start messaging";
 			_messagesPanel.Controls.Clear();
 			UpdateInteractionState();
 			return;
@@ -378,14 +686,14 @@ public sealed class SocialPage : UserControl
 		var selectedFriend = GetSelectedFriend();
 		if (string.IsNullOrWhiteSpace(selectedFriend))
 		{
-			_statusLabel.Text = "Status: add and select a friend first";
+			_statusLabel.Text = "Status: select a friend first";
 			return;
 		}
 
 		var message = _socialService.SendTextMessage(selectedFriend, _messageInput.Text);
 		if (message == null)
 		{
-			_statusLabel.Text = "Status: write a message first";
+			_statusLabel.Text = "Status: write a message or make sure you are friends";
 			return;
 		}
 
@@ -454,9 +762,24 @@ public sealed class SocialPage : UserControl
 
 	private void UpdateInteractionState()
 	{
-		var hasFriend = !string.IsNullOrWhiteSpace(GetSelectedFriend());
+		var canUseSocial = _socialService.IsDatabaseConfigured && _socialService.IsLoggedIn;
+		var hasFriend = canUseSocial && !string.IsNullOrWhiteSpace(GetSelectedFriend());
+		var hasRequest = canUseSocial && _pendingRequestsList.SelectedItem is SocialFriendRequest;
+
+		_usernameInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
+		_displayNameInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
+		_passwordInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
+		_loginButton.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
+		_createAccountButton.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
+		_logoutButton.Enabled = _socialService.IsDatabaseConfigured && _socialService.IsLoggedIn;
+		_friendNameInput.Enabled = canUseSocial;
+		_pendingRequestsList.Enabled = canUseSocial;
+		_acceptRequestButton.Enabled = hasRequest;
+		_rejectRequestButton.Enabled = hasRequest;
+		_friendsList.Enabled = canUseSocial;
 		_sendButton.Enabled = hasFriend;
 		_messageInput.Enabled = hasFriend;
+		_splitContainer.Enabled = canUseSocial;
 		_backButton.Visible = _splitContainer.Panel1Collapsed && !_splitContainer.Panel2Collapsed && hasFriend;
 	}
 
@@ -465,7 +788,6 @@ public sealed class SocialPage : UserControl
 		_splitContainer.Panel1Collapsed = false;
 		_splitContainer.Panel2Collapsed = true;
 		_backButton.Visible = false;
-		_friendsList.Focus();
 	}
 
 	private Control BuildMessageCard(SocialMessage message)
@@ -561,5 +883,4 @@ public sealed class SocialPage : UserControl
 
 		_messagesPanel.ScrollControlIntoView(_messagesPanel.Controls[_messagesPanel.Controls.Count - 1]);
 	}
-
 }

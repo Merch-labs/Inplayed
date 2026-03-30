@@ -6,6 +6,11 @@ internal sealed class SocialService
 	private readonly SocialDatabaseStore? _databaseStore;
 	private readonly SocialState? _state;
 
+	public bool IsDatabaseConfigured => _databaseStore != null;
+	public bool IsLoggedIn => _databaseStore != null && _databaseStore.IsLoggedIn;
+	public string CurrentUsername => _databaseStore?.CurrentUsername ?? string.Empty;
+	public string CurrentDisplayName => _databaseStore?.CurrentDisplayName ?? string.Empty;
+
 	public SocialService(LocalSocialStore? store = null)
 	{
 		if (store != null)
@@ -20,15 +25,9 @@ internal sealed class SocialService
 		var connectionString = config.Social.DatabaseConnectionString?.Trim() ?? string.Empty;
 		if (!string.IsNullOrWhiteSpace(connectionString))
 		{
-			var username = config.Social.Username?.Trim();
-			if (string.IsNullOrWhiteSpace(username))
-			{
-				username = Environment.UserName;
-			}
-
 			try
 			{
-				_databaseStore = new SocialDatabaseStore(connectionString, username);
+				_databaseStore = new SocialDatabaseStore(connectionString);
 				return;
 			}
 			catch
@@ -39,6 +38,33 @@ internal sealed class SocialService
 		_store = new LocalSocialStore();
 		_state = _store.Load();
 		NormalizeState();
+	}
+
+	public bool CreateAccount(string username, string displayName, string password, out string message)
+	{
+		if (_databaseStore == null)
+		{
+			message = "Set up the social database in Settings first.";
+			return false;
+		}
+
+		return _databaseStore.CreateAccount(username, displayName, password, out message);
+	}
+
+	public bool Login(string username, string password, out string message)
+	{
+		if (_databaseStore == null)
+		{
+			message = "Set up the social database in Settings first.";
+			return false;
+		}
+
+		return _databaseStore.Login(username, password, out message);
+	}
+
+	public void Logout()
+	{
+		_databaseStore?.Logout();
 	}
 
 	public IReadOnlyList<string> GetFriends()
@@ -61,6 +87,50 @@ internal sealed class SocialService
 		return InsertionSortAlgorithm.Run(
 			friends,
 			(left, right) => StringComparer.OrdinalIgnoreCase.Compare(left, right));
+	}
+
+	public IReadOnlyList<SocialFriendRequest> GetPendingFriendRequests()
+	{
+		if (_databaseStore == null)
+		{
+			return [];
+		}
+
+		return _databaseStore.GetPendingFriendRequests();
+	}
+
+	public bool SendFriendRequest(string username, out string normalizedUsername, out string message)
+	{
+		normalizedUsername = string.Empty;
+		if (_databaseStore == null)
+		{
+			message = "Set up the social database in Settings first.";
+			return false;
+		}
+
+		return _databaseStore.SendFriendRequest(username, out normalizedUsername, out message);
+	}
+
+	public bool AcceptFriendRequest(int requestId, out string message)
+	{
+		if (_databaseStore == null)
+		{
+			message = "Set up the social database in Settings first.";
+			return false;
+		}
+
+		return _databaseStore.AcceptFriendRequest(requestId, out message);
+	}
+
+	public bool RejectFriendRequest(int requestId, out string message)
+	{
+		if (_databaseStore == null)
+		{
+			message = "Set up the social database in Settings first.";
+			return false;
+		}
+
+		return _databaseStore.RejectFriendRequest(requestId, out message);
 	}
 
 	public IReadOnlyList<SocialMessage> GetMessages(string friendName)
@@ -91,7 +161,7 @@ internal sealed class SocialService
 	{
 		if (_databaseStore != null)
 		{
-			return _databaseStore.AddFriend(rawName, out normalizedName);
+			return _databaseStore.SendFriendRequest(rawName, out normalizedName, out _);
 		}
 
 		normalizedName = NormalizeName(rawName);
