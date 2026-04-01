@@ -26,8 +26,6 @@ public sealed class SettingsPage : UserControl
 	private readonly CheckBox _launchOnWindowsStartupCheckBox;
 	private readonly CheckBox _startHiddenOnWindowsStartupCheckBox;
 	private readonly CheckBox _autoStartCaptureWhenHiddenLaunchCheckBox;
-	private readonly TextBox _socialUsernameTextBox;
-	private readonly TextBox _socialDatabaseConnectionStringTextBox;
 	private readonly Label _configPathLabel;
 	private readonly Label _statusLabel;
 	private readonly Action? _onSettingsSaved;
@@ -49,13 +47,12 @@ public sealed class SettingsPage : UserControl
 			Dock = DockStyle.Top,
 			AutoSize = true,
 			AutoSizeMode = AutoSizeMode.GrowAndShrink,
-			RowCount = 10,
+			RowCount = 9,
 			ColumnCount = 1,
 			Padding = new Padding(12),
 			BackColor = UiTheme.ShellBackground
 		};
 		root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -362,40 +359,6 @@ public sealed class SettingsPage : UserControl
 		startupLayout.Controls.Add(_autoStartCaptureWhenHiddenLaunchCheckBox);
 		startupGroup.Controls.Add(startupLayout);
 
-		var socialGroup = new GroupBox
-		{
-			AutoSize = true,
-			Dock = DockStyle.Top,
-			Text = "Social Database",
-			Padding = new Padding(10)
-		};
-
-		var socialLayout = new TableLayoutPanel
-		{
-			AutoSize = true,
-			ColumnCount = 2,
-			RowCount = 2,
-			Dock = DockStyle.Fill
-		};
-		socialLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-		socialLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-
-		_socialUsernameTextBox = new TextBox
-		{
-			Width = 220
-		};
-
-		_socialDatabaseConnectionStringTextBox = new TextBox
-		{
-			Width = 480
-		};
-
-		socialLayout.Controls.Add(new Label { AutoSize = true, Text = "Username", Margin = new Padding(0, 7, 8, 0) }, 0, 0);
-		socialLayout.Controls.Add(_socialUsernameTextBox, 1, 0);
-		socialLayout.Controls.Add(new Label { AutoSize = true, Text = "Connection String", Margin = new Padding(0, 7, 8, 0) }, 0, 1);
-		socialLayout.Controls.Add(_socialDatabaseConnectionStringTextBox, 1, 1);
-		socialGroup.Controls.Add(socialLayout);
-
 		_configPathLabel = new Label
 		{
 			AutoSize = true
@@ -413,24 +376,20 @@ public sealed class SettingsPage : UserControl
 		var reloadButton = new Button { Text = "Reload", AutoSize = true };
 		var defaultsButton = new Button { Text = "Reset Defaults", AutoSize = true };
 		var openConfigButton = new Button { Text = "Open Config File", AutoSize = true };
-		var testSocialDatabaseButton = new Button { Text = "Test Social Database", AutoSize = true };
 		UiTheme.StyleAccentButton(saveButton);
 		UiTheme.StyleSecondaryButton(reloadButton);
 		UiTheme.StyleSecondaryButton(defaultsButton);
 		UiTheme.StyleSecondaryButton(openConfigButton);
-		UiTheme.StyleSecondaryButton(testSocialDatabaseButton);
 
 		saveButton.Click += (_, _) => SaveSettings();
 		reloadButton.Click += (_, _) => LoadSettings();
 		defaultsButton.Click += (_, _) => LoadDefaults();
 		openConfigButton.Click += (_, _) => OpenConfigFile();
-		testSocialDatabaseButton.Click += (_, _) => TestSocialDatabase();
 
 		actions.Controls.Add(saveButton);
 		actions.Controls.Add(reloadButton);
 		actions.Controls.Add(defaultsButton);
 		actions.Controls.Add(openConfigButton);
-		actions.Controls.Add(testSocialDatabaseButton);
 
 		_statusLabel = new Label
 		{
@@ -444,10 +403,9 @@ public sealed class SettingsPage : UserControl
 		root.Controls.Add(captureTargetGroup, 0, 3);
 		root.Controls.Add(hotkeyGroup, 0, 4);
 		root.Controls.Add(startupGroup, 0, 5);
-		root.Controls.Add(socialGroup, 0, 6);
-		root.Controls.Add(_configPathLabel, 0, 7);
-		root.Controls.Add(actions, 0, 8);
-		root.Controls.Add(_statusLabel, 0, 9);
+		root.Controls.Add(_configPathLabel, 0, 6);
+		root.Controls.Add(actions, 0, 7);
+		root.Controls.Add(_statusLabel, 0, 8);
 
 		scrollHost.Controls.Add(root);
 		Controls.Add(scrollHost);
@@ -491,8 +449,6 @@ public sealed class SettingsPage : UserControl
 		_launchOnWindowsStartupCheckBox.Checked = config.Startup.LaunchOnWindowsStartup;
 		_startHiddenOnWindowsStartupCheckBox.Checked = config.Startup.StartHiddenOnWindowsStartup;
 		_autoStartCaptureWhenHiddenLaunchCheckBox.Checked = config.Startup.AutoStartCaptureWhenHiddenLaunch;
-		_socialUsernameTextBox.Text = config.Social.Username;
-		_socialDatabaseConnectionStringTextBox.Text = config.Social.DatabaseConnectionString;
 		UpdateStartupInputs();
 	}
 
@@ -511,17 +467,6 @@ public sealed class SettingsPage : UserControl
 			if (!yamnetValidation.IsValid)
 			{
 				_statusLabel.Text = $"Status: {yamnetValidation.Message}";
-				return;
-			}
-		}
-
-		var socialConnectionString = _socialDatabaseConnectionStringTextBox.Text.Trim();
-		if (!string.IsNullOrWhiteSpace(socialConnectionString))
-		{
-			var socialUsername = _socialUsernameTextBox.Text.Trim();
-			if (!SocialDatabaseStore.TryConnect(socialConnectionString, socialUsername, out var socialMessage))
-			{
-				_statusLabel.Text = $"Status: social database failed: {socialMessage}";
 				return;
 			}
 		}
@@ -560,11 +505,6 @@ public sealed class SettingsPage : UserControl
 				LaunchOnWindowsStartup = _launchOnWindowsStartupCheckBox.Checked,
 				StartHiddenOnWindowsStartup = _startHiddenOnWindowsStartupCheckBox.Checked,
 				AutoStartCaptureWhenHiddenLaunch = _autoStartCaptureWhenHiddenLaunchCheckBox.Checked
-			},
-			Social = new AppConfig.SocialConfig
-			{
-				Username = _socialUsernameTextBox.Text.Trim(),
-				DatabaseConnectionString = _socialDatabaseConnectionStringTextBox.Text.Trim()
 			}
 		};
 
@@ -591,19 +531,6 @@ public sealed class SettingsPage : UserControl
 		}
 
 		System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
-	}
-
-	private void TestSocialDatabase()
-	{
-		var connectionString = _socialDatabaseConnectionStringTextBox.Text.Trim();
-		var username = _socialUsernameTextBox.Text.Trim();
-		if (SocialDatabaseStore.TryConnect(connectionString, username, out var message))
-		{
-			_statusLabel.Text = $"Status: {message}";
-			return;
-		}
-
-		_statusLabel.Text = $"Status: social database failed: {message}";
 	}
 
 	private void BrowseExecutablePath()

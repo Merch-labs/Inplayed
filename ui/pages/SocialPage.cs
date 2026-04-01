@@ -100,7 +100,6 @@ public sealed class SocialPage : UserControl
 		_pendingRequestsList.SelectedIndexChanged += (_, _) => UpdateInteractionState();
 		_messagesPanel.Resize += (_, _) => ResizeMessageCards();
 		_messageInput.KeyDown += HandleMessageInputKeyDown;
-		_usernameInput.Text = AppConfig.Load().Social.Username;
 
 		UiTheme.ApplyPalette(this);
 		RefreshAuthenticationState();
@@ -565,21 +564,9 @@ public sealed class SocialPage : UserControl
 
 	private void RefreshAuthenticationState()
 	{
-		if (!_socialService.IsDatabaseConfigured)
-		{
-			_authLabel.Text = "Set the social database connection in Settings first.";
-			_friendsSource.DataSource = new List<string>();
-			_requestsSource.DataSource = new List<SocialFriendRequest>();
-			_messagesPanel.Controls.Clear();
-			_conversationTitleLabel.Text = "Set up the social database in Settings";
-			ShowProfilesOnly();
-			UpdateInteractionState();
-			return;
-		}
-
 		if (!_socialService.IsLoggedIn)
 		{
-			_authLabel.Text = "Log in or create an account to use social features.";
+			_authLabel.Text = $"Log in or create an account to use social features. Server: {SocialServerSettings.GetBaseUrl()}";
 			_friendsSource.DataSource = new List<string>();
 			_requestsSource.DataSource = new List<SocialFriendRequest>();
 			_messagesPanel.Controls.Clear();
@@ -762,16 +749,16 @@ public sealed class SocialPage : UserControl
 
 	private void UpdateInteractionState()
 	{
-		var canUseSocial = _socialService.IsDatabaseConfigured && _socialService.IsLoggedIn;
+		var canUseSocial = _socialService.IsLoggedIn;
 		var hasFriend = canUseSocial && !string.IsNullOrWhiteSpace(GetSelectedFriend());
 		var hasRequest = canUseSocial && _pendingRequestsList.SelectedItem is SocialFriendRequest;
 
-		_usernameInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
-		_displayNameInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
-		_passwordInput.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
-		_loginButton.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
-		_createAccountButton.Enabled = _socialService.IsDatabaseConfigured && !_socialService.IsLoggedIn;
-		_logoutButton.Enabled = _socialService.IsDatabaseConfigured && _socialService.IsLoggedIn;
+		_usernameInput.Enabled = !_socialService.IsLoggedIn;
+		_displayNameInput.Enabled = !_socialService.IsLoggedIn;
+		_passwordInput.Enabled = !_socialService.IsLoggedIn;
+		_loginButton.Enabled = !_socialService.IsLoggedIn;
+		_createAccountButton.Enabled = !_socialService.IsLoggedIn;
+		_logoutButton.Enabled = _socialService.IsLoggedIn;
 		_friendNameInput.Enabled = canUseSocial;
 		_pendingRequestsList.Enabled = canUseSocial;
 		_acceptRequestButton.Enabled = hasRequest;

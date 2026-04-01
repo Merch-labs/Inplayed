@@ -25,7 +25,6 @@ Sources:
 Used for:
 - `config/AppConfig.cs`
 - `config/AppConfigStorage.cs`
-- `social/LocalSocialStore.cs`
 
 Sources:
 - System.Text.Json how-to: https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/how-to
@@ -75,20 +74,24 @@ Sources:
 - Linear search overview: https://www.programiz.com/dsa/linear-search
 - `File.Exists` API: https://learn.microsoft.com/en-us/dotnet/api/system.io.file.exists
 
-## Social Database
+## Social Server
 
 Used for:
-- `social/SocialDatabaseStore.cs`
+- `social/SocialApiClient.cs`
+- `social/SocialAuthSession.cs`
+- `social/SocialMessage.cs`
+- `social/SocialService.cs`
+- `server/Program.cs`
 - `server/sql/schema.sql`
-- `ui/pages/SettingsPage.cs`
 - `ui/pages/SocialPage.cs`
 
 Sources:
 - AQA guidance on areas of concern: https://www.aqa.org.uk/resources/computer-science-and-it/as-and-a-level/computer-science-7516-7517/teach/guidance-on-areas-of-concern
-- AQA relational databases and SQL content: https://www.aqa.org.uk/subjects/computer-science/gcse/computer-science-8525/specification/subject-content/relational-databases-and-structured-query-language-sql
-- Npgsql basic usage: https://www.npgsql.org/doc/basic-usage.html
-- PostgreSQL tutorial: https://www.postgresql.org/docs/current/tutorial.html
-- PostgreSQL ALTER TABLE: https://www.postgresql.org/docs/current/sql-altertable.html
+- AQA NEA guidance: https://filestore.aqa.org.uk/resources/computing/AQA-7517-NEA-GUIDE.PDF
+- ASP.NET Core minimal API tutorial: https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api
+- HttpClientJsonExtensions API: https://learn.microsoft.com/en-us/dotnet/api/system.net.http.json.httpclientjsonextensions
+- Microsoft.Data.Sqlite overview: https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/
+- SQLite CREATE TABLE tutorial: https://www.sqlitetutorial.net/sqlite-create-table/
 - SHA256 API: https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.sha256
 - TextBox.UseSystemPasswordChar API: https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.textbox.usesystempasswordchar
 

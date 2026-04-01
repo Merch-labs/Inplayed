@@ -13,7 +13,6 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.4" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="Npgsql" Version="9.*" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.2" />
   </ItemGroup>
 
@@ -46,10 +45,6 @@
   </Content>
   <Content Include="config\inplayed.config.json">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </Content>
-  <Content Include="server\sql\schema.sql">
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    <Link>server\sql\schema.sql</Link>
   </Content>
   </ItemGroup>
 

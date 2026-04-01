@@ -30,9 +30,5 @@
 		"launchOnWindowsStartup": false,
 		"startHiddenOnWindowsStartup": true,
 		"autoStartCaptureWhenHiddenLaunch": true
-	},
-	"social": {
-		"username": "",
-		"databaseConnectionString": ""
 	}
 }
